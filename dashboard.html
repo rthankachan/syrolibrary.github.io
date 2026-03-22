@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="nav" id="nav" hidden>
+    <span class="nav-brand">Syro Library</span>
+
+    <a href="dashboard.html" class="nav-link active">Books</a>
+
+    <!-- Admin-only links — shown by JS when role === 'admin' -->
+    <a href="students.html"  class="nav-link admin-only" hidden>Students</a>
+    <a href="books.html"     class="nav-link admin-only" hidden>Manage Books</a>
+    <a href="volunteers.html" class="nav-link admin-only" hidden>Volunteers</a>
+
+    <div class="nav-divider"></div>
+    <span class="nav-user" id="nav-user"></span>
+    <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+  </nav>
+
+  <!-- Page loading state (shown while auth resolves) -->
+  <div id="page-loading" class="page-loading">
+    <span class="spinner"></span>
+    <span>Loading…</span>
+  </div>
+
+  <!-- Main content (hidden until auth is confirmed) -->
+  <main id="page-content" class="page-content" hidden>
+
+    <div class="page-header">
+      <h1 class="page-title">Books</h1>
+    </div>
+
+    <div class="search-bar">
+      <input
+        type="search"
+        id="search-input"
+        class="search-input"
+        placeholder="Search by title or author…"
+        autocomplete="off"
+      />
+    </div>
+
+    <!-- Book grid populated by Phase 1 JS -->
+    <div id="book-grid" class="book-grid">
+      <!-- Placeholder cards shown while book data loads -->
+      <div class="empty-state" id="books-empty" hidden>
+        <p class="empty-state-title">No books found</p>
+        <p>Try a different search term, or add books from the Manage Books page.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import { requireAuth, signOutUser, getCurrentUser } from './js/auth.js';
+
+    // ── Auth guard — redirects to index.html if not logged in ───────────────
+    const user = await requireAuth();
+
+    // Auth confirmed — show the UI
+    document.getElementById('page-loading').hidden = true;
+    document.getElementById('nav').hidden          = false;
+    document.getElementById('page-content').hidden = false;
+
+    // Populate nav
+    document.getElementById('nav-user').textContent = user.name || user.email;
+
+    // Show admin-only nav links
+    if (user.role === 'admin') {
+      document.querySelectorAll('.admin-only').forEach(el => el.hidden = false);
+    }
+
+    // Sign-out
+    document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+    // ── Search input (wired up; book rendering added in Phase 1) ────────────
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      // Phase 1: filterBooks(e.target.value.trim())
+    });
+  </script>
+
+</body>
+</html>

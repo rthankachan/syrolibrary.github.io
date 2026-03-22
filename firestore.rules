@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Reads the caller's user doc by uid — only valid after first-login linking
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    function isAuthorized() {
+      return isAuthenticated() &&
+        (getUserData().role == 'admin' || getUserData().role == 'volunteer');
+    }
+
+    // ── /invitations/{email} ───────────────────────────────────────────────
+    // Admin pre-authorizes users here. Doc ID is the lowercase email address.
+    // On first login, the app reads this, creates /users/{uid}, deletes this.
+    match /invitations/{email} {
+      allow read, write, delete: if isAdmin();
+      // The invited person can read and delete their own invitation on login
+      allow read:   if isAuthenticated() && request.auth.token.email.lower() == email;
+      allow delete: if isAuthenticated() && request.auth.token.email.lower() == email;
+    }
+
+    // ── /users/{uid} ───────────────────────────────────────────────────────
+    match /users/{userId} {
+      // User can read their own doc; admin can read any
+      allow read: if isAuthenticated() &&
+        (request.auth.uid == userId || isAdmin());
+
+      // User creates their own doc on first login (converting an invitation)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      // User can only update their own lastLoginAt; admin can update anything
+      allow update: if isAuthenticated() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastLoginAt']);
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ── /books/{bookId} ────────────────────────────────────────────────────
+    match /books/{bookId} {
+      allow read: if isAuthorized();
+      // Admin manages books; volunteers only update availableCopies (checkout/checkin)
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow update: if isAuthorized() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['availableCopies', 'updatedAt']);
+    }
+
+    // ── /students/{studentId} ──────────────────────────────────────────────
+    match /students/{studentId} {
+      allow read: if isAuthorized();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── /checkouts/{checkoutId} ────────────────────────────────────────────
+    match /checkouts/{checkoutId} {
+      allow read: if isAuthorized();
+      allow create: if isAuthorized();
+      // Only status and returnedAt may change after creation (checkin operation)
+      allow update: if isAuthorized() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'returnedAt']);
+      allow delete: if isAdmin();
+    }
+  }
+}
