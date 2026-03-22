@@ -114,6 +114,17 @@
                   placeholder="Brief description of the book…"
                   style="resize:vertical; line-height:1.5"></textarea>
       </div>
+      <div class="form-group">
+        <label class="form-label">Labels <span class="text-muted">(optional)</span></label>
+        <div id="f-labels-chips" style="display:flex; flex-wrap:wrap; gap:0.375rem; margin-bottom:0.5rem;"></div>
+        <div style="display:flex; gap:0.5rem;">
+          <input id="f-label-input" class="form-input" type="text"
+                 placeholder="e.g. Fiction, Grade 4…" autocomplete="off"
+                 style="flex:1;" />
+          <button type="button" id="f-label-add" class="btn btn-ghost btn-sm"
+                  style="white-space:nowrap;">Add</button>
+        </div>
+      </div>
       <p id="modal-error" class="text-danger mt-2" hidden></p>
     </div>
 
@@ -144,8 +155,44 @@ document.getElementById('nav-user').innerHTML =
 document.getElementById('signout-btn').addEventListener('click', signOutUser);
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let _allBooks    = [];
-let _editingBook = null; // null = adding, object = editing
+let _allBooks      = [];
+let _editingBook   = null; // null = adding, object = editing
+let _editingLabels = [];   // current label chips in modal
+
+// ── Label chip helpers ────────────────────────────────────────────────────────
+function renderLabelChips() {
+  const container = document.getElementById('f-labels-chips');
+  container.innerHTML = _editingLabels.map((lbl, i) => `
+    <span style="display:inline-flex; align-items:center; gap:0.25rem;
+                 background:var(--color-gray-100); border:1px solid var(--color-gray-300);
+                 border-radius:9999px; padding:0.125rem 0.625rem; font-size:0.8125rem;">
+      ${escHtml(lbl)}
+      <button type="button" data-idx="${i}"
+              style="background:none; border:none; cursor:pointer; line-height:1;
+                     color:var(--color-gray-400); font-size:0.75rem; padding:0 0.125rem;"
+              aria-label="Remove ${escHtml(lbl)}">&#x2715;</button>
+    </span>`).join('');
+}
+
+function addLabelFromInput() {
+  const input = document.getElementById('f-label-input');
+  const val = input.value.trim();
+  if (!val || _editingLabels.includes(val)) { input.value = ''; return; }
+  _editingLabels.push(val);
+  input.value = '';
+  renderLabelChips();
+}
+
+document.getElementById('f-label-add').addEventListener('click', addLabelFromInput);
+document.getElementById('f-label-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addLabelFromInput(); }
+});
+document.getElementById('f-labels-chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-idx]');
+  if (!btn) return;
+  _editingLabels.splice(Number(btn.dataset.idx), 1);
+  renderLabelChips();
+});
 
 // ── Book subscription ─────────────────────────────────────────────────────────
 subscribeToBooks((books) => {
@@ -248,6 +295,9 @@ function openBookModal(book) {
   document.getElementById('f-copies').value           = book?.totalCopies ?? 1;
   document.getElementById('f-summary').value          = book?.summary ?? '';
   document.getElementById('f-copies-hint').hidden     = !book;
+  document.getElementById('f-label-input').value      = '';
+  _editingLabels = Array.isArray(book?.labels) ? [...book.labels] : [];
+  renderLabelChips();
   document.getElementById('modal-error').hidden       = true;
   document.getElementById('modal-save').disabled      = false;
   document.getElementById('modal-save').textContent   = book ? 'Save Changes' : 'Add Book';
@@ -276,10 +326,10 @@ document.getElementById('modal-save').addEventListener('click', async () => {
 
   try {
     if (_editingBook) {
-      await updateBook(_editingBook.id, { title, author, isbn, totalCopies, summary }, _editingBook);
+      await updateBook(_editingBook.id, { title, author, isbn, totalCopies, summary, labels: _editingLabels }, _editingBook);
       showToast('Book updated.', 'success');
     } else {
-      await addBook({ title, author, isbn, totalCopies, summary });
+      await addBook({ title, author, isbn, totalCopies, summary, labels: _editingLabels });
       showToast(`"${title}" added.`, 'success');
     }
     closeModal(bookModal);

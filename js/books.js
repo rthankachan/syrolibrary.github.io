@@ -46,12 +46,13 @@ export function getAvailabilityBadge(book) {
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
-export async function addBook({ title, author, isbn, totalCopies, summary }) {
+export async function addBook({ title, author, isbn, totalCopies, summary, labels }) {
   return addDoc(collection(db, 'books'), {
     title:           title.trim(),
     author:          author.trim(),
     isbn:            isbn.trim(),
     summary:         summary.trim(),
+    labels:          labels ?? [],
     totalCopies,
     availableCopies: totalCopies,
     createdAt:       serverTimestamp(),

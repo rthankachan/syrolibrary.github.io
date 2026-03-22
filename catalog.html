@@ -203,6 +203,7 @@
         <div id="dm-author"  style="font-size:0.9375rem; color:var(--color-gray-600); margin-bottom:0.5rem;"></div>
         <div id="dm-badge"   style="margin-bottom:0.75rem;"></div>
         <div id="dm-isbn"    style="font-size:0.8125rem; color:var(--color-gray-500); margin-bottom:0.75rem;"></div>
+        <div id="dm-labels"  style="display:flex; flex-wrap:wrap; gap:0.375rem; margin-bottom:0.75rem;"></div>
         <div id="dm-summary" style="font-size:0.875rem; color:var(--color-gray-700);
                                     line-height:1.6; white-space:pre-wrap;"></div>
       </div>
@@ -335,6 +336,10 @@ function openDetailModal(book) {
   document.getElementById('dm-author').textContent = book.author;
   document.getElementById('dm-badge').innerHTML    = `<span class="badge ${badgeCls}">${badgeLabel}</span>`;
   document.getElementById('dm-isbn').textContent   = book.isbn ? `ISBN: ${book.isbn}` : '';
+  document.getElementById('dm-labels').innerHTML   = Array.isArray(book.labels) && book.labels.length
+    ? book.labels.map(l => `<span style="background:var(--color-gray-100);border:1px solid var(--color-gray-300);
+        border-radius:9999px;padding:0.125rem 0.625rem;font-size:0.8125rem;">${escHtml(l)}</span>`).join('')
+    : '';
   document.getElementById('dm-summary').textContent = book.summary || '';
 
   // Cover
