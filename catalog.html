@@ -398,10 +398,11 @@ function badgeHtml(book) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
-function coverImgTag(isbn, title, loading = 'lazy') {
-  if (!isbn) return '';
-  return `<img src="https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-M.jpg"
-               alt="${escHtml(title)}" loading="${loading}" onerror="this.remove()" />`;
+function coverImgTag(book, size = 'M', loading = 'lazy') {
+  const src = book.imageUrl
+    || (book.isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(book.isbn)}-${size}.jpg` : '');
+  if (!src) return '';
+  return `<img src="${escHtml(src)}" alt="${escHtml(book.title)}" loading="${loading}" onerror="this.remove()" />`;
 }
 
 function renderCard(book) {
@@ -411,7 +412,7 @@ function renderCard(book) {
     <div class="book-card-catalog" data-id="${book.id}" style="cursor:pointer">
       <div class="book-cover" style="background-color:${color}">
         <span class="book-cover-initial">${escHtml(initial)}</span>
-        ${coverImgTag(book.isbn, book.title)}
+        ${coverImgTag(book)}
       </div>
       <div class="book-card-body">
         <div class="book-card-title">${escHtml(book.title)}</div>
@@ -429,7 +430,7 @@ function renderRow(book) {
     <div class="book-row-catalog" data-id="${book.id}">
       <div class="book-row-thumb" style="background-color:${color}">
         ${escHtml(initial)}
-        ${coverImgTag(book.isbn, book.title)}
+        ${coverImgTag(book)}
       </div>
       <div class="book-row-info">
         <div class="book-row-title">${escHtml(book.title)}</div>
@@ -451,9 +452,8 @@ document.getElementById('book-container').addEventListener('click', (e) => {
 function openDetailModal(book) {
   const color    = placeholderColor(book.title);
   const initial  = (book.title || '?')[0].toUpperCase();
-  const coverUrl = book.isbn
-    ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(book.isbn)}-L.jpg`
-    : null;
+  const coverUrl = book.imageUrl
+    || (book.isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(book.isbn)}-L.jpg` : null);
 
   const avail      = book.availableCopies > 0;
   const badgeCls   = avail ? 'badge-available' : 'badge-checked-out';
