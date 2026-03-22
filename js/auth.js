@@ -113,7 +113,9 @@ export function initAuth({ onAuthorized, onUnauthorized, requiredRole = null }) 
       const userData = await resolveUser(firebaseUser);
 
       if (!userData) {
-        await signOut(auth);
+        // User has a Firebase Auth session but no user doc and no invitation.
+        // Sign them out so they can't linger in a half-authenticated state.
+        try { await signOut(auth); } catch (_) {}
         onUnauthorized('no-access');
         return;
       }

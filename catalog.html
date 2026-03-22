@@ -165,7 +165,7 @@
       St. Thomas Syro Malabar Church, Fremont
     </div>
   </div>
-  <a href="login.html" class="btn btn-primary btn-sm" style="font-size:0.8125rem;">
+  <a id="staff-btn" href="login.html" class="btn btn-primary btn-sm" style="font-size:0.8125rem;">
     Staff login
   </a>
 </header>
@@ -261,6 +261,23 @@
 <script type="module">
 import { subscribeToBooks, filterBooks } from './js/books.js';
 import { escHtml, openModal, closeModal, initModalDismiss } from './js/ui.js';
+import { auth } from './js/firebase-config.js';
+import { onAuthStateChanged } from 'firebase/auth';
+
+// ── Keep session alive + update header button ─────────────────────────────────
+// Attaching a listener prevents Firebase from dropping the auth token while the
+// user browses the public catalog. It also swaps "Staff login" → "Dashboard"
+// so a logged-in staff member can get back without confusion.
+onAuthStateChanged(auth, (firebaseUser) => {
+  const btn = document.getElementById('staff-btn');
+  if (firebaseUser) {
+    btn.textContent = 'Dashboard →';
+    btn.href = 'dashboard.html';
+  } else {
+    btn.textContent = 'Staff login';
+    btn.href = 'login.html';
+  }
+});
 
 // ── Cover helpers ─────────────────────────────────────────────────────────────
 const COLORS = [
