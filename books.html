@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Books — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" hidden>
+  <span class="nav-brand">Syro Library</span>
+  <a href="dashboard.html"  class="nav-link">Books</a>
+  <a href="students.html"   class="nav-link">Students</a>
+  <a href="books.html"      class="nav-link active">Manage Books</a>
+  <a href="volunteers.html" class="nav-link">Volunteers</a>
+  <div class="nav-divider"></div>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
+
+<!-- ── Page loading ───────────────────────────────────────────────────────── -->
+<div id="page-loading" class="page-loading">
+  <span class="spinner"></span>
+  <span>Loading…</span>
+</div>
+
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<main id="page-content" class="page-content" hidden>
+
+  <div class="page-header">
+    <h1 class="page-title">Manage Books</h1>
+    <button id="add-book-btn" class="btn btn-primary" type="button">+ Add Book</button>
+  </div>
+
+  <div class="search-bar">
+    <input
+      type="search"
+      id="search-input"
+      class="search-input"
+      placeholder="Search by title, author, or ISBN…"
+      autocomplete="off"
+    />
+  </div>
+
+  <div class="table-wrapper">
+    <table id="books-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Author</th>
+          <th>ISBN</th>
+          <th>Copies</th>
+          <th class="td-actions"></th>
+        </tr>
+      </thead>
+      <tbody id="books-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="empty-state hidden" id="books-empty">
+    <p class="empty-state-title">No books yet</p>
+    <p>Click "Add Book" to add your first book.</p>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Add / Edit Book Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="book-modal" class="modal-overlay" hidden>
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-title">Add Book</h2>
+      <button class="modal-close" id="modal-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="f-title">Title <span style="color:var(--color-danger)">*</span></label>
+        <input id="f-title" class="form-input" type="text" placeholder="e.g. Charlotte's Web" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-author">Author <span style="color:var(--color-danger)">*</span></label>
+        <input id="f-author" class="form-input" type="text" placeholder="e.g. E.B. White" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-isbn">ISBN <span class="text-muted">(optional)</span></label>
+        <input id="f-isbn" class="form-input" type="text" placeholder="e.g. 9780064400558" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-copies">Total Copies <span style="color:var(--color-danger)">*</span></label>
+        <input id="f-copies" class="form-input" type="number" min="1" max="99" value="1" />
+        <p class="form-hint" id="f-copies-hint" hidden>
+          Currently checked out copies will be preserved. Available copies will be recalculated.
+        </p>
+      </div>
+      <p id="modal-error" class="text-danger mt-2" hidden></p>
+    </div>
+
+    <div class="modal-footer">
+      <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="modal-save"   class="btn btn-primary">Save Book</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Page Script
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { requireAuth, signOutUser }                    from './js/auth.js';
+import { subscribeToBooks, filterBooks,
+         addBook, updateBook, deleteBook }              from './js/books.js';
+import { showToast, openModal, closeModal,
+         initModalDismiss, escHtml }                    from './js/ui.js';
+
+// ── Auth guard (admin only) ───────────────────────────────────────────────────
+const user = await requireAuth('admin');
+
+document.getElementById('nav').hidden           = false;
+document.getElementById('nav-user').textContent = user.name || user.email;
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _allBooks    = [];
+let _editingBook = null; // null = adding, object = editing
+
+// ── Book subscription ─────────────────────────────────────────────────────────
+subscribeToBooks((books) => {
+  _allBooks = books;
+  applySearch();
+  document.getElementById('page-loading').hidden  = true;
+  document.getElementById('page-content').hidden  = false;
+});
+
+// ── Search ────────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', (e) => {
+  applySearch(e.target.value.trim());
+});
+
+function applySearch(term = '') {
+  renderTable(filterBooks(_allBooks, term));
+}
+
+// ── Render table ──────────────────────────────────────────────────────────────
+function renderTable(books) {
+  const tbody    = document.getElementById('books-tbody');
+  const emptyMsg = document.getElementById('books-empty');
+  const table    = document.getElementById('books-table');
+
+  if (!books.length) {
+    table.hidden    = true;
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+
+  table.hidden = false;
+  emptyMsg.classList.add('hidden');
+
+  tbody.innerHTML = books.map(b => `
+    <tr>
+      <td style="font-weight:500">${escHtml(b.title)}</td>
+      <td>${escHtml(b.author)}</td>
+      <td style="color:var(--color-gray-500)">${escHtml(b.isbn) || '—'}</td>
+      <td>
+        <span class="${b.availableCopies > 0 ? 'badge badge-available' : 'badge badge-checked-out'}">
+          ${b.availableCopies}/${b.totalCopies}
+        </span>
+      </td>
+      <td class="td-actions">
+        <button class="btn btn-ghost btn-sm edit-btn"   data-id="${b.id}">Edit</button>
+        <button class="btn btn-danger btn-sm delete-btn" data-id="${b.id}" style="margin-left:0.25rem">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Table button delegation ───────────────────────────────────────────────────
+document.getElementById('books-tbody').addEventListener('click', (e) => {
+  const editBtn   = e.target.closest('.edit-btn');
+  const deleteBtn = e.target.closest('.delete-btn');
+
+  if (editBtn) {
+    const book = _allBooks.find(b => b.id === editBtn.dataset.id);
+    if (book) openBookModal(book);
+  }
+
+  if (deleteBtn) {
+    const book = _allBooks.find(b => b.id === deleteBtn.dataset.id);
+    if (book) handleDelete(book, deleteBtn);
+  }
+});
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function handleDelete(book, btn) {
+  if (!confirm(`Delete "${book.title}"?\nThis cannot be undone.`)) return;
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+
+  try {
+    await deleteBook(book.id);
+    showToast(`"${book.title}" deleted.`);
+  } catch (err) {
+    showToast(err.message, 'error');
+    btn.disabled    = false;
+    btn.textContent = 'Delete';
+  }
+}
+
+// ── Add / Edit Modal ──────────────────────────────────────────────────────────
+const bookModal = document.getElementById('book-modal');
+initModalDismiss(bookModal);
+document.getElementById('modal-close').addEventListener('click',  () => closeModal(bookModal));
+document.getElementById('modal-cancel').addEventListener('click', () => closeModal(bookModal));
+
+document.getElementById('add-book-btn').addEventListener('click', () => openBookModal(null));
+
+function openBookModal(book) {
+  _editingBook = book;
+
+  document.getElementById('modal-title').textContent  = book ? 'Edit Book' : 'Add Book';
+  document.getElementById('modal-save').textContent   = book ? 'Save Changes' : 'Add Book';
+  document.getElementById('f-title').value            = book?.title   ?? '';
+  document.getElementById('f-author').value           = book?.author  ?? '';
+  document.getElementById('f-isbn').value             = book?.isbn    ?? '';
+  document.getElementById('f-copies').value           = book?.totalCopies ?? 1;
+  document.getElementById('f-copies-hint').hidden     = !book;
+  document.getElementById('modal-error').hidden       = true;
+  document.getElementById('modal-save').disabled      = false;
+  document.getElementById('modal-save').textContent   = book ? 'Save Changes' : 'Add Book';
+
+  openModal(bookModal);
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+document.getElementById('modal-save').addEventListener('click', async () => {
+  const errorEl  = document.getElementById('modal-error');
+  const saveBtn  = document.getElementById('modal-save');
+  errorEl.hidden = true;
+
+  const title      = document.getElementById('f-title').value.trim();
+  const author     = document.getElementById('f-author').value.trim();
+  const isbn       = document.getElementById('f-isbn').value.trim();
+  const totalCopies = parseInt(document.getElementById('f-copies').value, 10);
+
+  if (!title)              { return showFieldError(errorEl, 'Title is required.'); }
+  if (!author)             { return showFieldError(errorEl, 'Author is required.'); }
+  if (!totalCopies || totalCopies < 1) { return showFieldError(errorEl, 'Copies must be at least 1.'); }
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Saving…';
+
+  try {
+    if (_editingBook) {
+      await updateBook(_editingBook.id, { title, author, isbn, totalCopies }, _editingBook);
+      showToast('Book updated.', 'success');
+    } else {
+      await addBook({ title, author, isbn, totalCopies });
+      showToast(`"${title}" added.`, 'success');
+    }
+    closeModal(bookModal);
+  } catch (err) {
+    console.error(err);
+    showFieldError(errorEl, 'Save failed. Please try again.');
+    saveBtn.disabled    = false;
+    saveBtn.textContent = _editingBook ? 'Save Changes' : 'Add Book';
+  }
+});
+
+function showFieldError(el, msg) {
+  el.textContent = msg;
+  el.hidden = false;
+}
+</script>
+
+</body>
+</html>

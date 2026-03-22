@@ -1,9 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// books.js — Real-time book subscription, client-side search, availability badge
+// books.js — Real-time subscription, client-side search, availability badge, CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from './firebase-config.js';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import {
+  collection, doc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, getDocs, query, where, orderBy,
+  serverTimestamp,
+} from 'firebase/firestore';
+
+// ── Read ──────────────────────────────────────────────────────────────────────
 
 // Subscribe to all books ordered by title.
 // onUpdate(books[]) is called immediately and on every change.
@@ -36,4 +42,51 @@ export function getAvailabilityBadge(book) {
     return { label, cls: 'badge-available' };
   }
   return { label: 'Checked out', cls: 'badge-checked-out' };
+}
+
+// ── Create ────────────────────────────────────────────────────────────────────
+
+export async function addBook({ title, author, isbn, totalCopies }) {
+  return addDoc(collection(db, 'books'), {
+    title:           title.trim(),
+    author:          author.trim(),
+    isbn:            isbn.trim(),
+    totalCopies,
+    availableCopies: totalCopies,
+    createdAt:       serverTimestamp(),
+    updatedAt:       serverTimestamp(),
+  });
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+
+// Recalculates availableCopies when totalCopies changes:
+//   checkedOut = old totalCopies − old availableCopies
+//   new available = new totalCopies − checkedOut  (floored at 0)
+export async function updateBook(id, { title, author, isbn, totalCopies }, currentBook) {
+  const checkedOut   = currentBook.totalCopies - currentBook.availableCopies;
+  const newAvailable = Math.max(0, totalCopies - checkedOut);
+  return updateDoc(doc(db, 'books', id), {
+    title:           title.trim(),
+    author:          author.trim(),
+    isbn:            isbn.trim(),
+    totalCopies,
+    availableCopies: newAvailable,
+    updatedAt:       serverTimestamp(),
+  });
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+
+// Refuses to delete if the book has active checkouts.
+export async function deleteBook(id) {
+  const snap = await getDocs(
+    query(collection(db, 'checkouts'),
+      where('bookId', '==', id),
+      where('status', '==', 'active'))
+  );
+  if (!snap.empty) {
+    throw new Error('This book has active checkouts. Check it in before deleting.');
+  }
+  return deleteDoc(doc(db, 'books', id));
 }

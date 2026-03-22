@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Students — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" hidden>
+  <span class="nav-brand">Syro Library</span>
+  <a href="dashboard.html"  class="nav-link">Books</a>
+  <a href="students.html"   class="nav-link active">Students</a>
+  <a href="books.html"      class="nav-link">Manage Books</a>
+  <a href="volunteers.html" class="nav-link">Volunteers</a>
+  <div class="nav-divider"></div>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
+
+<!-- ── Page loading ───────────────────────────────────────────────────────── -->
+<div id="page-loading" class="page-loading">
+  <span class="spinner"></span>
+  <span>Loading…</span>
+</div>
+
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<main id="page-content" class="page-content" hidden>
+
+  <div class="page-header">
+    <h1 class="page-title">Students</h1>
+    <button id="add-student-btn" class="btn btn-primary" type="button">+ Add Student</button>
+  </div>
+
+  <div class="search-bar">
+    <input
+      type="search"
+      id="search-input"
+      class="search-input"
+      placeholder="Search by name or grade…"
+      autocomplete="off"
+    />
+  </div>
+
+  <div class="table-wrapper">
+    <table id="students-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Grade</th>
+          <th class="td-actions"></th>
+        </tr>
+      </thead>
+      <tbody id="students-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="empty-state hidden" id="students-empty">
+    <p class="empty-state-title">No students yet</p>
+    <p>Click "Add Student" to add your first student.</p>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Add / Edit Student Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="student-modal" class="modal-overlay" hidden>
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title" id="student-modal-title">Add Student</h2>
+      <button class="modal-close" id="student-modal-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="f-name">Name <span style="color:var(--color-danger)">*</span></label>
+        <input id="f-name" class="form-input" type="text" placeholder="e.g. Maria Thomas" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-grade">Grade <span style="color:var(--color-danger)">*</span></label>
+        <input id="f-grade" class="form-input" type="text" placeholder="e.g. Grade 4" autocomplete="off" />
+      </div>
+      <p id="student-modal-error" class="text-danger mt-2" hidden></p>
+    </div>
+
+    <div class="modal-footer">
+      <button id="student-modal-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="student-modal-save"   class="btn btn-primary">Add Student</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Student History Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="history-modal" class="modal-overlay" hidden>
+  <div class="modal" style="max-width:560px">
+
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title" id="hm-name"></h2>
+        <p id="hm-grade" style="font-size:0.8125rem; color:var(--color-gray-500); margin-top:0.125rem;"></p>
+      </div>
+      <button class="modal-close" id="hm-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Active checkouts -->
+      <p style="font-weight:600; font-size:0.875rem; margin-bottom:0.5rem;">Currently checked out</p>
+      <div id="hm-active"></div>
+
+      <!-- Returned history -->
+      <p style="font-weight:600; font-size:0.875rem; margin-top:1.25rem; margin-bottom:0.5rem;">
+        Checkout history
+      </p>
+      <div id="hm-history"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Page Script
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { requireAuth, signOutUser }                    from './js/auth.js';
+import { loadStudents, addStudent, updateStudent,
+         getStudentCheckouts, invalidateStudentCache }  from './js/students.js';
+import { showToast, openModal, closeModal,
+         initModalDismiss, escHtml, formatDate }        from './js/ui.js';
+import { getOverdueStatus }                            from './js/checkouts.js';
+
+// ── Auth guard (admin only) ───────────────────────────────────────────────────
+const user = await requireAuth('admin');
+
+document.getElementById('nav').hidden           = false;
+document.getElementById('nav-user').textContent = user.name || user.email;
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _allStudents    = [];
+let _editingStudent = null;
+
+// ── Load students ─────────────────────────────────────────────────────────────
+async function refresh() {
+  invalidateStudentCache();
+  _allStudents = await loadStudents();
+  applySearch();
+  document.getElementById('page-loading').hidden = true;
+  document.getElementById('page-content').hidden = false;
+}
+await refresh();
+
+// ── Search ────────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', (e) => {
+  applySearch(e.target.value.trim());
+});
+
+function applySearch(term = '') {
+  const t = term.toLowerCase();
+  const filtered = term
+    ? _allStudents.filter(s =>
+        s.name.toLowerCase().includes(t) ||
+        s.grade.toLowerCase().includes(t))
+    : _allStudents;
+  renderTable(filtered);
+}
+
+// ── Render table ──────────────────────────────────────────────────────────────
+function renderTable(students) {
+  const tbody    = document.getElementById('students-tbody');
+  const emptyMsg = document.getElementById('students-empty');
+  const table    = document.getElementById('students-table');
+
+  if (!students.length) {
+    table.hidden = true;
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+
+  table.hidden = false;
+  emptyMsg.classList.add('hidden');
+
+  tbody.innerHTML = students.map(s => `
+    <tr>
+      <td style="font-weight:500">${escHtml(s.name)}</td>
+      <td>${escHtml(s.grade)}</td>
+      <td class="td-actions">
+        <button class="btn btn-ghost btn-sm history-btn" data-id="${s.id}">History</button>
+        <button class="btn btn-ghost btn-sm edit-btn"    data-id="${s.id}" style="margin-left:0.25rem">Edit</button>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Table button delegation ───────────────────────────────────────────────────
+document.getElementById('students-tbody').addEventListener('click', (e) => {
+  const historyBtn = e.target.closest('.history-btn');
+  const editBtn    = e.target.closest('.edit-btn');
+
+  if (historyBtn) {
+    const student = _allStudents.find(s => s.id === historyBtn.dataset.id);
+    if (student) openHistoryModal(student);
+  }
+  if (editBtn) {
+    const student = _allStudents.find(s => s.id === editBtn.dataset.id);
+    if (student) openStudentModal(student);
+  }
+});
+
+// ── Add / Edit Student Modal ──────────────────────────────────────────────────
+const studentModal = document.getElementById('student-modal');
+initModalDismiss(studentModal);
+document.getElementById('student-modal-close').addEventListener('click',  () => closeModal(studentModal));
+document.getElementById('student-modal-cancel').addEventListener('click', () => closeModal(studentModal));
+
+document.getElementById('add-student-btn').addEventListener('click', () => openStudentModal(null));
+
+function openStudentModal(student) {
+  _editingStudent = student;
+
+  document.getElementById('student-modal-title').textContent = student ? 'Edit Student' : 'Add Student';
+  document.getElementById('student-modal-save').textContent  = student ? 'Save Changes' : 'Add Student';
+  document.getElementById('f-name').value                    = student?.name  ?? '';
+  document.getElementById('f-grade').value                   = student?.grade ?? '';
+  document.getElementById('student-modal-error').hidden      = true;
+  document.getElementById('student-modal-save').disabled     = false;
+
+  openModal(studentModal);
+}
+
+document.getElementById('student-modal-save').addEventListener('click', async () => {
+  const errorEl = document.getElementById('student-modal-error');
+  const saveBtn = document.getElementById('student-modal-save');
+  errorEl.hidden = true;
+
+  const name  = document.getElementById('f-name').value.trim();
+  const grade = document.getElementById('f-grade').value.trim();
+
+  if (!name)  { errorEl.textContent = 'Name is required.';  errorEl.hidden = false; return; }
+  if (!grade) { errorEl.textContent = 'Grade is required.'; errorEl.hidden = false; return; }
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Saving…';
+
+  try {
+    if (_editingStudent) {
+      await updateStudent(_editingStudent.id, { name, grade });
+      showToast('Student updated.', 'success');
+    } else {
+      await addStudent({ name, grade });
+      showToast(`${name} added.`, 'success');
+    }
+    closeModal(studentModal);
+    await refresh();
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = 'Save failed. Please try again.';
+    errorEl.hidden      = false;
+    saveBtn.disabled    = false;
+    saveBtn.textContent = _editingStudent ? 'Save Changes' : 'Add Student';
+  }
+});
+
+// ── Student History Modal ─────────────────────────────────────────────────────
+const historyModal = document.getElementById('history-modal');
+initModalDismiss(historyModal);
+document.getElementById('hm-close').addEventListener('click', () => closeModal(historyModal));
+
+async function openHistoryModal(student) {
+  document.getElementById('hm-name').textContent  = student.name;
+  document.getElementById('hm-grade').textContent = student.grade;
+  document.getElementById('hm-active').innerHTML  =
+    '<span class="spinner spinner-sm"></span>';
+  document.getElementById('hm-history').innerHTML =
+    '<span class="spinner spinner-sm"></span>';
+
+  openModal(historyModal);
+
+  try {
+    const { active, returned } = await getStudentCheckouts(student.id);
+
+    // Active checkouts
+    const activeEl = document.getElementById('hm-active');
+    if (!activeEl) return;
+    if (!active.length) {
+      activeEl.innerHTML = '<p class="text-muted">No books currently checked out.</p>';
+    } else {
+      activeEl.innerHTML = active.map(co => {
+        const { label, cls } = getOverdueStatus(co.dueDate);
+        return `
+          <div style="display:flex; align-items:center; justify-content:space-between;
+                      padding:0.5rem 0; border-bottom:1px solid var(--color-gray-100); gap:0.5rem;">
+            <div>
+              <div style="font-weight:500; font-size:0.875rem;">${escHtml(co.bookTitle)}</div>
+              <div style="font-size:0.8125rem; color:var(--color-gray-500);">
+                Due ${formatDate(co.dueDate)}
+              </div>
+            </div>
+            <span class="badge ${cls}">${label}</span>
+          </div>`;
+      }).join('');
+    }
+
+    // Checkout history
+    const historyEl = document.getElementById('hm-history');
+    if (!historyEl) return;
+    if (!returned.length) {
+      historyEl.innerHTML = '<p class="text-muted">No checkout history yet.</p>';
+    } else {
+      historyEl.innerHTML = `
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Book</th>
+                <th>Checked Out</th>
+                <th>Returned</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${returned.map(co => `
+                <tr>
+                  <td>${escHtml(co.bookTitle)}</td>
+                  <td style="white-space:nowrap">${formatDate(co.checkedOutAt)}</td>
+                  <td style="white-space:nowrap">${co.returnedAt ? formatDate(co.returnedAt) : '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+  } catch (err) {
+    console.error(err);
+    document.getElementById('hm-active').innerHTML  = '<p class="text-danger">Failed to load. Please try again.</p>';
+    document.getElementById('hm-history').innerHTML = '';
+  }
+}
+</script>
+
+</body>
+</html>

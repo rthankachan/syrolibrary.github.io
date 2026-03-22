@@ -1,15 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// students.js — Load all active students once into memory, search client-side
-// Decision: Option A — 500 students ≈ 50KB, loaded at login, filtered locally
+// students.js — In-memory load + typeahead search + CRUD + checkout history
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from './firebase-config.js';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import {
+  collection, doc, addDoc, updateDoc,
+  getDocs, query, where, orderBy,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 let _students = null; // null = not yet loaded
 
-// Loads all active students into memory. Safe to call multiple times —
-// subsequent calls return the cached array without hitting Firestore.
+// ── Read ──────────────────────────────────────────────────────────────────────
+
+// Loads all active students into memory. Cached — call invalidateStudentCache()
+// after any mutation to force a fresh fetch on the next call.
 export async function loadStudents() {
   if (_students !== null) return _students;
 
@@ -23,8 +28,7 @@ export async function loadStudents() {
   return _students;
 }
 
-// Filter the in-memory list by name or grade.
-// Returns at most 8 results for the typeahead dropdown.
+// Filter the in-memory list by name or grade (used for typeahead on dashboard)
 export function searchStudents(term) {
   if (!_students || !term.trim()) return [];
   const t = term.toLowerCase();
@@ -40,7 +44,52 @@ export function getAllStudents() {
   return _students ?? [];
 }
 
-// Call this after adding or editing a student to bust the cache
 export function invalidateStudentCache() {
   _students = null;
+}
+
+// Returns all checkouts for a student, split into active and returned arrays.
+// Uses the composite index: studentId ASC, status ASC, checkedOutAt DESC
+export async function getStudentCheckouts(studentId) {
+  const [activeSnap, returnedSnap] = await Promise.all([
+    getDocs(query(
+      collection(db, 'checkouts'),
+      where('studentId', '==', studentId),
+      where('status',    '==', 'active')
+    )),
+    getDocs(query(
+      collection(db, 'checkouts'),
+      where('studentId', '==', studentId),
+      where('status',    '==', 'returned'),
+      orderBy('checkedOutAt', 'desc')
+    )),
+  ]);
+
+  return {
+    active:   activeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+    returned: returnedSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+  };
+}
+
+// ── Create ────────────────────────────────────────────────────────────────────
+
+export async function addStudent({ name, grade }) {
+  const ref = await addDoc(collection(db, 'students'), {
+    name:      name.trim(),
+    grade:     grade.trim(),
+    active:    true,
+    createdAt: serverTimestamp(),
+  });
+  invalidateStudentCache();
+  return ref;
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+
+export async function updateStudent(id, { name, grade }) {
+  await updateDoc(doc(db, 'students', id), {
+    name:  name.trim(),
+    grade: grade.trim(),
+  });
+  invalidateStudentCache();
 }
