@@ -19,83 +19,459 @@
 </head>
 <body>
 
-  <!-- Navigation -->
-  <nav class="nav" id="nav" hidden>
-    <span class="nav-brand">Syro Library</span>
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" hidden>
+  <span class="nav-brand">Syro Library</span>
+  <a href="dashboard.html"  class="nav-link active">Books</a>
+  <a href="students.html"   class="nav-link admin-only" hidden>Students</a>
+  <a href="books.html"      class="nav-link admin-only" hidden>Manage Books</a>
+  <a href="volunteers.html" class="nav-link admin-only" hidden>Volunteers</a>
+  <div class="nav-divider"></div>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
 
-    <a href="dashboard.html" class="nav-link active">Books</a>
+<!-- ── Page loading ───────────────────────────────────────────────────────── -->
+<div id="page-loading" class="page-loading">
+  <span class="spinner"></span>
+  <span>Loading…</span>
+</div>
 
-    <!-- Admin-only links — shown by JS when role === 'admin' -->
-    <a href="students.html"  class="nav-link admin-only" hidden>Students</a>
-    <a href="books.html"     class="nav-link admin-only" hidden>Manage Books</a>
-    <a href="volunteers.html" class="nav-link admin-only" hidden>Volunteers</a>
-
-    <div class="nav-divider"></div>
-    <span class="nav-user" id="nav-user"></span>
-    <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
-  </nav>
-
-  <!-- Page loading state (shown while auth resolves) -->
-  <div id="page-loading" class="page-loading">
-    <span class="spinner"></span>
-    <span>Loading…</span>
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<main id="page-content" class="page-content" hidden>
+  <div class="page-header">
+    <h1 class="page-title">Books</h1>
   </div>
 
-  <!-- Main content (hidden until auth is confirmed) -->
-  <main id="page-content" class="page-content" hidden>
+  <div class="search-bar">
+    <input
+      type="search"
+      id="search-input"
+      class="search-input"
+      placeholder="Search by title, author, or ISBN…"
+      autocomplete="off"
+    />
+  </div>
 
-    <div class="page-header">
-      <h1 class="page-title">Books</h1>
+  <div id="book-grid" class="book-grid"></div>
+
+  <div class="empty-state hidden" id="books-empty">
+    <p class="empty-state-title">No books found</p>
+    <p>Try a different search term.</p>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Book Detail Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="book-modal" class="modal-overlay" hidden>
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title" id="bm-title"></h2>
+      <button class="modal-close" id="bm-close" aria-label="Close">&#x2715;</button>
     </div>
 
-    <div class="search-bar">
-      <input
-        type="search"
-        id="search-input"
-        class="search-input"
-        placeholder="Search by title or author…"
-        autocomplete="off"
-      />
+    <div class="modal-body">
+      <!-- Book info rows -->
+      <div id="bm-info"></div>
+
+      <!-- Active checkouts list -->
+      <div id="bm-checkouts"></div>
     </div>
 
-    <!-- Book grid populated by Phase 1 JS -->
-    <div id="book-grid" class="book-grid">
-      <!-- Placeholder cards shown while book data loads -->
-      <div class="empty-state" id="books-empty" hidden>
-        <p class="empty-state-title">No books found</p>
-        <p>Try a different search term, or add books from the Manage Books page.</p>
+    <div class="modal-footer">
+      <button id="bm-checkout-btn" class="btn btn-primary" hidden>Check Out</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Checkout Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="checkout-modal" class="modal-overlay" hidden>
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title">Check Out</h2>
+      <button class="modal-close" id="cm-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <p id="cm-book-name" style="font-weight:600; margin-bottom:1.25rem;"></p>
+
+      <div class="form-group">
+        <label class="form-label" for="cm-student-input">Student</label>
+        <div class="typeahead-wrapper">
+          <input
+            id="cm-student-input"
+            class="form-input"
+            placeholder="Type student name…"
+            autocomplete="off"
+          />
+          <div id="cm-student-dropdown" class="typeahead-dropdown" hidden></div>
+        </div>
       </div>
+
+      <div class="form-group">
+        <label class="form-label" for="cm-due-date">Due Date</label>
+        <input id="cm-due-date" type="date" class="form-input" />
+        <p class="form-hint">Default is 14 days from today.</p>
+      </div>
+
+      <p id="cm-error" class="text-danger mt-2" hidden></p>
     </div>
 
-  </main>
+    <div class="modal-footer">
+      <button id="cm-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="cm-confirm" class="btn btn-primary">Confirm Checkout</button>
+    </div>
 
-  <script type="module">
-    import { requireAuth, signOutUser, getCurrentUser } from './js/auth.js';
+  </div>
+</div>
 
-    // ── Auth guard — redirects to index.html if not logged in ───────────────
-    const user = await requireAuth();
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Page Script
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { requireAuth, signOutUser }               from './js/auth.js';
+import { subscribeToBooks, filterBooks,
+         getAvailabilityBadge }                   from './js/books.js';
+import { loadStudents, searchStudents }            from './js/students.js';
+import { getActiveCheckoutsForBook,
+         checkoutBook, checkinBook,
+         getOverdueStatus }                        from './js/checkouts.js';
+import { showToast, openModal, closeModal,
+         initModalDismiss, escHtml, formatDate }   from './js/ui.js';
+import { Timestamp }                               from 'firebase/firestore';
 
-    // Auth confirmed — show the UI
-    document.getElementById('page-loading').hidden = true;
-    document.getElementById('nav').hidden          = false;
-    document.getElementById('page-content').hidden = false;
+// ── Auth guard ────────────────────────────────────────────────────────────────
+const user = await requireAuth();
 
-    // Populate nav
-    document.getElementById('nav-user').textContent = user.name || user.email;
+document.getElementById('page-loading').hidden = false; // keep spinner while data loads
 
-    // Show admin-only nav links
-    if (user.role === 'admin') {
-      document.querySelectorAll('.admin-only').forEach(el => el.hidden = false);
+document.getElementById('nav').hidden        = false;
+document.getElementById('nav-user').textContent = user.name || user.email;
+
+if (user.role === 'admin') {
+  document.querySelectorAll('.admin-only').forEach(el => el.hidden = false);
+}
+
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _allBooks        = [];
+let _currentBook     = null;  // book currently open in the detail modal
+let _selectedStudent = null;  // student chosen in the checkout typeahead
+let _typeaheadHits   = [];    // current typeahead result set
+
+// ── Load students into memory, then start book subscription ──────────────────
+await loadStudents();
+
+subscribeToBooks((books) => {
+  _allBooks = books;
+
+  // If the detail modal is open, refresh the availability line
+  if (_currentBook && !document.getElementById('book-modal').hidden) {
+    const fresh = books.find(b => b.id === _currentBook.id);
+    if (fresh) {
+      _currentBook = fresh;
+      renderBookInfo(fresh); // lightweight refresh — just the info rows + button
+    }
+  }
+
+  applySearch();
+
+  // Hide page spinner once we have data
+  document.getElementById('page-loading').hidden = true;
+  document.getElementById('page-content').hidden = false;
+});
+
+// ── Search ────────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', (e) => {
+  applySearch(e.target.value.trim());
+});
+
+function applySearch(term = '') {
+  renderBookGrid(filterBooks(_allBooks, term));
+}
+
+// ── Render book grid ──────────────────────────────────────────────────────────
+function renderBookGrid(books) {
+  const grid     = document.getElementById('book-grid');
+  const emptyMsg = document.getElementById('books-empty');
+
+  if (!books.length) {
+    grid.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+
+  emptyMsg.classList.add('hidden');
+  grid.innerHTML = books.map(book => {
+    const { label, cls } = getAvailabilityBadge(book);
+    const copiesNote = book.totalCopies > 1
+      ? `<span class="book-copies">${book.totalCopies} copies</span>`
+      : '';
+    return `
+      <div class="book-card" data-id="${book.id}">
+        <div class="book-card-title">${escHtml(book.title)}</div>
+        <div class="book-card-author">${escHtml(book.author)}</div>
+        <div class="book-card-footer">
+          <span class="badge ${cls}">${escHtml(label)}</span>
+          ${copiesNote}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Book card click → open detail modal ──────────────────────────────────────
+document.getElementById('book-grid').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-id]');
+  if (!card) return;
+  const book = _allBooks.find(b => b.id === card.dataset.id);
+  if (book) openBookModal(book);
+});
+
+// ── Book Detail Modal ─────────────────────────────────────────────────────────
+const bookModal = document.getElementById('book-modal');
+initModalDismiss(bookModal);
+document.getElementById('bm-close').addEventListener('click', () => closeModal(bookModal));
+
+async function openBookModal(book) {
+  _currentBook = book;
+  renderBookInfo(book);
+  loadAndRenderCheckouts(book); // async, fills the list below
+  openModal(bookModal);
+}
+
+// Renders just the info rows and checkout button (fast, no async)
+function renderBookInfo(book) {
+  document.getElementById('bm-title').textContent = book.title;
+
+  document.getElementById('bm-info').innerHTML = `
+    <div class="info-row">
+      <span class="info-label">Author</span>
+      <span class="info-value">${escHtml(book.author)}</span>
+    </div>
+    ${book.isbn ? `
+    <div class="info-row">
+      <span class="info-label">ISBN</span>
+      <span class="info-value">${escHtml(book.isbn)}</span>
+    </div>` : ''}
+    <div class="info-row">
+      <span class="info-label">Copies</span>
+      <span class="info-value">${book.availableCopies} of ${book.totalCopies} available</span>
+    </div>`;
+
+  document.getElementById('bm-checkout-btn').hidden = book.availableCopies <= 0;
+}
+
+// Fetches and renders the active checkouts list below the info rows
+async function loadAndRenderCheckouts(book) {
+  const container = document.getElementById('bm-checkouts');
+
+  if (book.availableCopies >= book.totalCopies) {
+    // All copies available — nothing to show
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = `
+    <p class="text-muted mt-4" style="font-weight:600; font-size:0.875rem; margin-bottom:0.5rem;">
+      Currently checked out
+    </p>
+    <div id="bm-checkout-rows" style="display:flex;align-items:center;gap:0.5rem;">
+      <span class="spinner spinner-sm"></span><span class="text-muted" style="font-size:0.875rem;">Loading…</span>
+    </div>`;
+
+  try {
+    const checkouts = await getActiveCheckoutsForBook(book.id);
+    const rowsEl = document.getElementById('bm-checkout-rows');
+    if (!rowsEl) return; // modal was closed before query returned
+
+    if (!checkouts.length) {
+      rowsEl.innerHTML = '<p class="text-muted">No active checkouts found.</p>';
+      return;
     }
 
-    // Sign-out
-    document.getElementById('signout-btn').addEventListener('click', signOutUser);
+    rowsEl.innerHTML = checkouts.map(co => {
+      const { label, cls } = getOverdueStatus(co.dueDate);
+      return `
+        <div style="display:flex; align-items:center; justify-content:space-between;
+                    padding:0.625rem 0; border-bottom:1px solid var(--color-gray-100); gap:0.75rem;">
+          <div>
+            <div style="font-weight:500; font-size:0.875rem;">${escHtml(co.studentName)}</div>
+            <div style="font-size:0.8125rem; color:var(--color-gray-500);">
+              ${escHtml(co.studentGrade)} &middot; Due ${formatDate(co.dueDate)}
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.5rem; flex-shrink:0;">
+            <span class="badge ${cls}">${label}</span>
+            <button
+              class="btn btn-ghost btn-sm checkin-btn"
+              data-checkout-id="${co.id}"
+              data-student="${escHtml(co.studentName)}"
+              data-book-id="${book.id}"
+            >Check In</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('Failed to load checkouts:', err);
+    const rowsEl = document.getElementById('bm-checkout-rows');
+    if (rowsEl) rowsEl.innerHTML = '<p class="text-danger">Failed to load. Please try again.</p>';
+  }
+}
 
-    // ── Search input (wired up; book rendering added in Phase 1) ────────────
-    document.getElementById('search-input').addEventListener('input', (e) => {
-      // Phase 1: filterBooks(e.target.value.trim())
+// ── Check In (from book detail modal) ────────────────────────────────────────
+document.getElementById('bm-checkouts').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.checkin-btn');
+  if (!btn || btn.disabled) return;
+
+  const { checkoutId, student, bookId } = btn.dataset;
+  if (!confirm(`Confirm return from ${student}?`)) return;
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+
+  try {
+    await checkinBook({ checkoutId, bookId });
+    showToast('Book checked in!', 'success');
+    // onSnapshot updates availableCopies → renderBookInfo fires automatically
+    // Re-fetch the checkout list to remove the returned row
+    loadAndRenderCheckouts(_currentBook);
+  } catch (err) {
+    console.error(err);
+    showToast('Check-in failed. Try again.', 'error');
+    btn.disabled    = false;
+    btn.textContent = 'Check In';
+  }
+});
+
+// ── Checkout button (book modal → checkout modal) ─────────────────────────────
+document.getElementById('bm-checkout-btn').addEventListener('click', () => {
+  closeModal(bookModal);
+  openCheckoutModal(_currentBook);
+});
+
+// ── Checkout Modal ────────────────────────────────────────────────────────────
+const checkoutModal = document.getElementById('checkout-modal');
+initModalDismiss(checkoutModal);
+document.getElementById('cm-close').addEventListener('click',  () => closeModal(checkoutModal));
+document.getElementById('cm-cancel').addEventListener('click', () => closeModal(checkoutModal));
+
+function openCheckoutModal(book) {
+  _selectedStudent = null;
+  _typeaheadHits   = [];
+
+  document.getElementById('cm-book-name').textContent     = book.title;
+  document.getElementById('cm-student-input').value       = '';
+  document.getElementById('cm-student-dropdown').hidden   = true;
+  document.getElementById('cm-error').hidden              = true;
+  document.getElementById('cm-confirm').disabled          = false;
+  document.getElementById('cm-confirm').textContent       = 'Confirm Checkout';
+
+  // Default due date: today + 14 days
+  const due = new Date();
+  due.setDate(due.getDate() + 14);
+  document.getElementById('cm-due-date').value = due.toISOString().slice(0, 10);
+
+  openModal(checkoutModal);
+}
+
+// ── Student typeahead ─────────────────────────────────────────────────────────
+const studentInput    = document.getElementById('cm-student-input');
+const studentDropdown = document.getElementById('cm-student-dropdown');
+
+studentInput.addEventListener('input', () => {
+  _selectedStudent = null; // reset whenever user types
+  const term = studentInput.value.trim();
+
+  if (term.length < 1) {
+    studentDropdown.hidden = true;
+    _typeaheadHits = [];
+    return;
+  }
+
+  _typeaheadHits = searchStudents(term);
+
+  if (!_typeaheadHits.length) {
+    studentDropdown.hidden = true;
+    return;
+  }
+
+  studentDropdown.innerHTML = _typeaheadHits
+    .map((s, i) => `
+      <div class="typeahead-item" data-index="${i}">
+        ${escHtml(s.name)}
+        <span class="text-muted"> &middot; ${escHtml(s.grade)}</span>
+      </div>`)
+    .join('');
+  studentDropdown.hidden = false;
+});
+
+studentDropdown.addEventListener('mousedown', (e) => {
+  e.preventDefault(); // prevent input blur before we can read the click
+  const item = e.target.closest('.typeahead-item');
+  if (!item) return;
+  const student = _typeaheadHits[parseInt(item.dataset.index)];
+  _selectedStudent = student;
+  studentInput.value        = `${student.name} · ${student.grade}`;
+  studentDropdown.hidden    = true;
+});
+
+studentInput.addEventListener('blur', () => {
+  // Small delay so mousedown on a dropdown item fires first
+  setTimeout(() => { studentDropdown.hidden = true; }, 150);
+});
+
+// ── Confirm checkout ──────────────────────────────────────────────────────────
+document.getElementById('cm-confirm').addEventListener('click', async () => {
+  const errorEl   = document.getElementById('cm-error');
+  const confirmBtn = document.getElementById('cm-confirm');
+  errorEl.hidden = true;
+
+  if (!_selectedStudent) {
+    errorEl.textContent = 'Please select a student from the list.';
+    errorEl.hidden = false;
+    studentInput.focus();
+    return;
+  }
+
+  const dueDateStr = document.getElementById('cm-due-date').value;
+  if (!dueDateStr) {
+    errorEl.textContent = 'Please set a due date.';
+    errorEl.hidden = false;
+    return;
+  }
+
+  confirmBtn.disabled    = true;
+  confirmBtn.textContent = 'Checking out…';
+
+  try {
+    // Build a Firestore Timestamp from the local date string
+    const dueDate = Timestamp.fromDate(new Date(dueDateStr + 'T00:00:00'));
+
+    await checkoutBook({
+      book:    _currentBook,
+      student: _selectedStudent,
+      dueDate,
+      user,
     });
-  </script>
+
+    closeModal(checkoutModal);
+    showToast(`Checked out to ${_selectedStudent.name}`, 'success');
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = 'Checkout failed. Please try again.';
+    errorEl.hidden = false;
+    confirmBtn.disabled    = false;
+    confirmBtn.textContent = 'Confirm Checkout';
+  }
+});
+</script>
 
 </body>
 </html>
