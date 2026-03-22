@@ -150,7 +150,8 @@ import { getOverdueStatus }                            from './js/checkouts.js';
 const user = await requireAuth('admin');
 
 document.getElementById('nav').hidden           = false;
-document.getElementById('nav-user').textContent = user.name || user.email;
+document.getElementById('nav-user').innerHTML =
+  `${escHtml(user.name || user.email)} <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
 document.getElementById('signout-btn').addEventListener('click', signOutUser);
 
 // ── State ─────────────────────────────────────────────────────────────────────

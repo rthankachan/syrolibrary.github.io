@@ -152,7 +152,8 @@ const user = await requireAuth();
 document.getElementById('page-loading').hidden = false; // keep spinner while data loads
 
 document.getElementById('nav').hidden        = false;
-document.getElementById('nav-user').textContent = user.name || user.email;
+document.getElementById('nav-user').innerHTML =
+  `${escHtml(user.name || user.email)} <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
 
 if (user.role === 'admin') {
   document.querySelectorAll('.admin-only').forEach(el => el.hidden = false);
