@@ -24,28 +24,6 @@
     .catalog-brand { font-size: 1.0625rem; font-weight: 700; color: var(--color-gray-900); }
     .catalog-brand span { color: var(--color-primary); }
 
-    /* ── Staff nav bar (shown when logged in) ─────────────────────────────── */
-    .staff-nav-bar {
-      background: var(--color-gray-50);
-      border-bottom: 1px solid var(--color-gray-200);
-      padding: 0 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.125rem;
-      height: 42px;
-      position: sticky;
-      top: 56px;
-      z-index: 99;
-    }
-    .staff-nav-bar .nav-link {
-      font-size: 0.8125rem;
-      padding: 0.3rem 0.625rem;
-    }
-    .staff-nav-bar .nav-user {
-      font-size: 0.8rem;
-      color: var(--color-gray-500);
-      margin-right: 0.5rem;
-    }
 
     /* ── Label filter bar ─────────────────────────────────────────────────── */
     .label-bar {
@@ -162,7 +140,6 @@
       .book-grid-catalog { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.75rem; }
       .book-cover-initial { font-size: 2.25rem; }
       .catalog-header { padding: 0 1rem; }
-      .staff-nav-bar { padding: 0 1rem; }
     }
   </style>
 
@@ -179,7 +156,7 @@
 <body>
 
 <!-- ── Catalog header (always visible) ────────────────────────────────────── -->
-<header class="catalog-header">
+<header id="catalog-header" class="catalog-header">
   <div>
     <div class="catalog-brand">Syro <span>Library</span></div>
     <div style="font-size:0.75rem; color:var(--color-gray-500); margin-top:0.1rem;">
@@ -191,13 +168,14 @@
   </a>
 </header>
 
-<!-- ── Staff nav bar (visible when logged in) ─────────────────────────────── -->
-<nav id="staff-nav" class="staff-nav-bar" hidden>
-  <a href="catalog.html" class="nav-link active">Catalog</a>
+<!-- ── Staff nav (visible when logged in — identical structure to other pages) -->
+<nav id="staff-nav" class="nav" hidden>
+  <span class="nav-brand">Syro Library</span>
+  <a href="catalog.html"    class="nav-link active">Catalog</a>
   <a href="students.html"   class="nav-link admin-only" hidden>Students</a>
   <a href="books.html"      class="nav-link admin-only" hidden>Manage Books</a>
   <a href="volunteers.html" class="nav-link admin-only" hidden>Volunteers</a>
-  <div style="flex:1"></div>
+  <div class="nav-divider"></div>
   <span class="nav-user" id="nav-user"></span>
   <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
 </nav>
@@ -372,8 +350,8 @@ let _typeaheadHits   = [];
 initAuth({
   onAuthorized: async (user) => {
     _staffUser = user;
-    document.getElementById('staff-btn').hidden  = true;
-    document.getElementById('staff-nav').hidden  = false;
+    document.getElementById('catalog-header').hidden = true;
+    document.getElementById('staff-nav').hidden       = false;
     document.getElementById('nav-user').innerHTML =
       `${escHtml(user.name || user.email)} <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
     if (user.role === 'admin') {
