@@ -51,7 +51,8 @@ service cloud.firestore {
 
     // ── /books/{bookId} ────────────────────────────────────────────────────
     match /books/{bookId} {
-      allow read: if isAuthorized();
+      // Public read — book catalog is not sensitive; students browse without login
+      allow read: if true;
       // Admin manages books; volunteers only update availableCopies (checkout/checkin)
       allow create, delete: if isAdmin();
       allow update: if isAdmin();

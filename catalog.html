@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book Catalog — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <style>
+    /* ── Catalog header ───────────────────────────────────────────────────── */
+    .catalog-header {
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-gray-200);
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .catalog-brand {
+      font-size: 1.0625rem;
+      font-weight: 700;
+      color: var(--color-gray-900);
+    }
+    .catalog-brand span {
+      color: var(--color-primary);
+    }
+
+    /* ── Book grid ────────────────────────────────────────────────────────── */
+    .book-grid-catalog {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 1.25rem;
+    }
+    .book-card-catalog {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+    .book-card-catalog:hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-gray-300);
+    }
+
+    /* ── Book cover ───────────────────────────────────────────────────────── */
+    .book-cover {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .book-cover img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+    .book-cover-initial {
+      font-size: 3rem;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.75);
+      user-select: none;
+      line-height: 1;
+    }
+
+    /* ── Card body ────────────────────────────────────────────────────────── */
+    .book-card-body {
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .book-card-title {
+      font-weight: 600;
+      font-size: 0.875rem;
+      line-height: 1.35;
+      color: var(--color-gray-900);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .book-card-author {
+      font-size: 0.8rem;
+      color: var(--color-gray-500);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 0.25rem;
+    }
+
+    /* ── Count + results bar ──────────────────────────────────────────────── */
+    .results-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      font-size: 0.875rem;
+      color: var(--color-gray-500);
+    }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .book-grid-catalog {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 0.75rem;
+      }
+      .book-cover-initial { font-size: 2.25rem; }
+      .catalog-header { padding: 0 1rem; }
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="catalog-header">
+  <span class="catalog-brand">Syro <span>Library</span></span>
+  <a href="index.html" style="font-size:0.8125rem; color:var(--color-gray-500);">
+    Staff login
+  </a>
+</header>
+
+<!-- ── Content ────────────────────────────────────────────────────────────── -->
+<div class="page-content">
+
+  <div class="search-bar" style="margin-top:1rem;">
+    <input
+      type="search"
+      id="search-input"
+      class="search-input"
+      placeholder="Search by title or author…"
+      autocomplete="off"
+    />
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="page-loading">
+    <span class="spinner"></span>
+    <span>Loading books…</span>
+  </div>
+
+  <!-- Results count -->
+  <div id="results-bar" class="results-bar" hidden>
+    <span id="count"></span>
+  </div>
+
+  <!-- Book grid -->
+  <div id="book-grid" class="book-grid-catalog" hidden></div>
+
+  <!-- Empty state -->
+  <div class="empty-state hidden" id="empty">
+    <p class="empty-state-title">No books found</p>
+    <p>Try a different search term.</p>
+  </div>
+
+</div>
+
+<script type="module">
+import { subscribeToBooks, filterBooks } from './js/books.js';
+import { escHtml }                       from './js/ui.js';
+
+// ── Cover image ───────────────────────────────────────────────────────────────
+// Uses Open Library's free cover API when an ISBN is available.
+// Falls back to a coloured placeholder with the book's first letter.
+
+const COLORS = [
+  '#1a56db', '#057a55', '#c27803', '#7e3af2',
+  '#0369a1', '#be185d', '#047857', '#b45309',
+  '#dc2626', '#0891b2',
+];
+
+function placeholderColor(title) {
+  let h = 0;
+  for (const c of (title || '')) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+  return COLORS[Math.abs(h) % COLORS.length];
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _allBooks = [];
+
+// ── Subscribe (public — no auth needed once rules are deployed) ───────────────
+subscribeToBooks((books) => {
+  _allBooks = books;
+  const term = document.getElementById('search-input').value.trim();
+  renderGrid(filterBooks(books, term));
+  document.getElementById('loading').hidden     = true;
+  document.getElementById('results-bar').hidden = false;
+  document.getElementById('book-grid').hidden   = false;
+});
+
+// ── Search ────────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', (e) => {
+  renderGrid(filterBooks(_allBooks, e.target.value.trim()));
+});
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderGrid(books) {
+  const grid  = document.getElementById('book-grid');
+  const empty = document.getElementById('empty');
+  const count = document.getElementById('count');
+
+  count.textContent = books.length
+    ? `${books.length} book${books.length !== 1 ? 's' : ''}`
+    : '';
+
+  if (!books.length) {
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+
+  grid.innerHTML = books.map(book => {
+    const color   = placeholderColor(book.title);
+    const initial = (book.title || '?')[0].toUpperCase();
+    const coverUrl = book.isbn
+      ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(book.isbn)}-M.jpg`
+      : null;
+
+    const avail      = book.availableCopies > 0;
+    const badgeCls   = avail ? 'badge-available' : 'badge-checked-out';
+    const badgeLabel = avail
+      ? (book.totalCopies > 1
+          ? `Available (${book.availableCopies}/${book.totalCopies})`
+          : 'Available')
+      : 'Checked out';
+
+    return `
+      <div class="book-card-catalog">
+        <div class="book-cover" style="background-color:${color}">
+          <span class="book-cover-initial">${escHtml(initial)}</span>
+          ${coverUrl
+            ? `<img src="${coverUrl}" alt="${escHtml(book.title)}" loading="lazy"
+                    onerror="this.remove()" />`
+            : ''}
+        </div>
+        <div class="book-card-body">
+          <div class="book-card-title">${escHtml(book.title)}</div>
+          <div class="book-card-author">${escHtml(book.author)}</div>
+          <span class="badge ${badgeCls}">${badgeLabel}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+</script>
+
+</body>
+</html>
