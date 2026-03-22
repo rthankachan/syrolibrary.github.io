@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Volunteers — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" hidden>
+  <span class="nav-brand">Syro Library</span>
+  <a href="dashboard.html"  class="nav-link">Books</a>
+  <a href="students.html"   class="nav-link">Students</a>
+  <a href="books.html"      class="nav-link">Manage Books</a>
+  <a href="volunteers.html" class="nav-link active">Volunteers</a>
+  <div class="nav-divider"></div>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
+
+<!-- ── Page loading ───────────────────────────────────────────────────────── -->
+<div id="page-loading" class="page-loading">
+  <span class="spinner"></span>
+  <span>Loading…</span>
+</div>
+
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<main id="page-content" class="page-content" hidden>
+
+  <div class="page-header">
+    <h1 class="page-title">Volunteers</h1>
+    <button id="add-btn" class="btn btn-primary" type="button">+ Add Volunteer</button>
+  </div>
+
+  <!-- ── Active volunteers ─────────────────────────────────────────────────── -->
+  <h2 style="font-size:0.875rem; font-weight:600; text-transform:uppercase;
+             letter-spacing:0.05em; color:var(--color-gray-500); margin-bottom:0.75rem;">
+    Active
+  </h2>
+
+  <div class="table-wrapper" id="active-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th class="td-actions"></th>
+        </tr>
+      </thead>
+      <tbody id="active-tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state hidden" id="active-empty">
+    <p class="empty-state-title">No volunteers yet</p>
+    <p>Add a volunteer below and share the site URL with them.</p>
+  </div>
+
+  <!-- ── Pending invitations ───────────────────────────────────────────────── -->
+  <h2 style="font-size:0.875rem; font-weight:600; text-transform:uppercase;
+             letter-spacing:0.05em; color:var(--color-gray-500);
+             margin-top:2rem; margin-bottom:0.75rem;">
+    Pending Invitations
+    <span class="text-muted" style="font-weight:400; text-transform:none; letter-spacing:0;">
+      — waiting for first sign-in
+    </span>
+  </h2>
+
+  <div class="table-wrapper" id="pending-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th class="td-actions"></th>
+        </tr>
+      </thead>
+      <tbody id="pending-tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state hidden" id="pending-empty">
+    <p style="color:var(--color-gray-500); font-size:0.875rem;">No pending invitations.</p>
+  </div>
+
+  <!-- ── How it works ──────────────────────────────────────────────────────── -->
+  <div style="margin-top:2.5rem; padding:1rem 1.25rem;
+              background:var(--color-primary-light); border-radius:var(--radius-md);
+              font-size:0.875rem; color:var(--color-gray-700); line-height:1.6;">
+    <strong>How to add a volunteer:</strong>
+    Enter their name and Google email address, then click Add. They will appear under
+    <em>Pending Invitations</em> until they visit the site and sign in with that Google account
+    for the first time. After sign-in they move to <em>Active</em> automatically.
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Add Volunteer Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="add-modal" class="modal-overlay" hidden>
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title">Add Volunteer</h2>
+      <button class="modal-close" id="modal-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="text-muted mb-4" style="margin-bottom:1.25rem;">
+        Enter the volunteer's name and their Google account email. They can sign in once
+        you share the library URL with them.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="f-name">
+          Full Name <span style="color:var(--color-danger)">*</span>
+        </label>
+        <input id="f-name" class="form-input" type="text"
+               placeholder="e.g. Sarah Mathew" autocomplete="off" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="f-email">
+          Google Email <span style="color:var(--color-danger)">*</span>
+        </label>
+        <input id="f-email" class="form-input" type="email"
+               placeholder="e.g. sarah.mathew@gmail.com" autocomplete="off" />
+        <p class="form-hint">Must be the exact Gmail or Google Workspace address they use.</p>
+      </div>
+
+      <p id="modal-error" class="text-danger mt-2" hidden></p>
+    </div>
+
+    <div class="modal-footer">
+      <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="modal-save"   class="btn btn-primary">Send Invitation</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Page Script
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { requireAuth, signOutUser }                    from './js/auth.js';
+import { getVolunteers, getPendingInvitations,
+         addVolunteerInvitation, removeVolunteer,
+         revokeInvitation }                            from './js/volunteers.js';
+import { showToast, openModal, closeModal,
+         initModalDismiss, escHtml }                   from './js/ui.js';
+
+// ── Auth guard (admin only) ───────────────────────────────────────────────────
+const user = await requireAuth('admin');
+
+document.getElementById('nav').hidden           = false;
+document.getElementById('nav-user').textContent = user.name || user.email;
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── Load both lists ───────────────────────────────────────────────────────────
+async function refresh() {
+  const [volunteers, invitations] = await Promise.all([
+    getVolunteers(),
+    getPendingInvitations(),
+  ]);
+  renderActive(volunteers);
+  renderPending(invitations);
+  document.getElementById('page-loading').hidden = true;
+  document.getElementById('page-content').hidden = false;
+}
+await refresh();
+
+// ── Render active volunteers ──────────────────────────────────────────────────
+function renderActive(volunteers) {
+  const tbody   = document.getElementById('active-tbody');
+  const wrapper = document.getElementById('active-wrapper');
+  const empty   = document.getElementById('active-empty');
+
+  if (!volunteers.length) {
+    wrapper.hidden = true;
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  wrapper.hidden = false;
+  empty.classList.add('hidden');
+
+  tbody.innerHTML = volunteers.map(v => `
+    <tr>
+      <td style="font-weight:500">${escHtml(v.name)}</td>
+      <td style="color:var(--color-gray-500)">${escHtml(v.email)}</td>
+      <td class="td-actions">
+        <button class="btn btn-danger btn-sm remove-btn" data-uid="${v.id}" data-name="${escHtml(v.name)}">
+          Remove
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Render pending invitations ────────────────────────────────────────────────
+function renderPending(invitations) {
+  const tbody   = document.getElementById('pending-tbody');
+  const wrapper = document.getElementById('pending-wrapper');
+  const empty   = document.getElementById('pending-empty');
+
+  if (!invitations.length) {
+    wrapper.hidden = true;
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  wrapper.hidden = false;
+  empty.classList.add('hidden');
+
+  tbody.innerHTML = invitations.map(inv => `
+    <tr>
+      <td style="font-weight:500">${escHtml(inv.name)}</td>
+      <td style="color:var(--color-gray-500)">${escHtml(inv.email)}</td>
+      <td class="td-actions">
+        <span class="badge badge-checked-out" style="margin-right:0.5rem">Pending</span>
+        <button class="btn btn-ghost btn-sm revoke-btn" data-email="${escHtml(inv.email)}" data-name="${escHtml(inv.name)}">
+          Revoke
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Remove active volunteer ───────────────────────────────────────────────────
+document.getElementById('active-tbody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.remove-btn');
+  if (!btn || btn.disabled) return;
+
+  const { uid, name } = btn.dataset;
+  if (!confirm(`Remove ${name}?\nThey will lose access immediately on their next page load.`)) return;
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+
+  try {
+    await removeVolunteer(uid);
+    showToast(`${name} removed.`, 'success');
+    await refresh();
+  } catch (err) {
+    console.error(err);
+    showToast('Remove failed. Please try again.', 'error');
+    btn.disabled    = false;
+    btn.textContent = 'Remove';
+  }
+});
+
+// ── Revoke pending invitation ─────────────────────────────────────────────────
+document.getElementById('pending-tbody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.revoke-btn');
+  if (!btn || btn.disabled) return;
+
+  const { email, name } = btn.dataset;
+  if (!confirm(`Revoke invitation for ${name} (${email})?`)) return;
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+
+  try {
+    await revokeInvitation(email);
+    showToast('Invitation revoked.', 'success');
+    await refresh();
+  } catch (err) {
+    console.error(err);
+    showToast('Revoke failed. Please try again.', 'error');
+    btn.disabled    = false;
+    btn.textContent = 'Revoke';
+  }
+});
+
+// ── Add Volunteer Modal ───────────────────────────────────────────────────────
+const addModal = document.getElementById('add-modal');
+initModalDismiss(addModal);
+document.getElementById('modal-close').addEventListener('click',  () => closeModal(addModal));
+document.getElementById('modal-cancel').addEventListener('click', () => closeModal(addModal));
+
+document.getElementById('add-btn').addEventListener('click', () => {
+  document.getElementById('f-name').value        = '';
+  document.getElementById('f-email').value       = '';
+  document.getElementById('modal-error').hidden  = true;
+  document.getElementById('modal-save').disabled = false;
+  document.getElementById('modal-save').textContent = 'Send Invitation';
+  openModal(addModal);
+});
+
+document.getElementById('modal-save').addEventListener('click', async () => {
+  const errorEl = document.getElementById('modal-error');
+  const saveBtn = document.getElementById('modal-save');
+  errorEl.hidden = true;
+
+  const name  = document.getElementById('f-name').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+
+  if (!name)                      { return showError(errorEl, 'Name is required.'); }
+  if (!email || !email.includes('@')) { return showError(errorEl, 'A valid email is required.'); }
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Adding…';
+
+  try {
+    await addVolunteerInvitation({ name, email, addedBy: user.uid });
+    closeModal(addModal);
+    showToast(`Invitation created for ${name}.`, 'success');
+    await refresh();
+  } catch (err) {
+    showError(errorEl, err.message || 'Failed to add volunteer. Please try again.');
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Send Invitation';
+  }
+});
+
+function showError(el, msg) {
+  el.textContent = msg;
+  el.hidden = false;
+}
+</script>
+
+</body>
+</html>
