@@ -176,9 +176,40 @@
 
 </div>
 
+<!-- ── Book Detail Modal ──────────────────────────────────────────────────── -->
+<div id="detail-modal" class="modal-overlay" hidden>
+  <div class="modal" style="max-width:520px">
+
+    <div class="modal-header">
+      <h2 class="modal-title" id="dm-title"></h2>
+      <button class="modal-close" id="dm-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body" style="display:flex; gap:1.25rem; align-items:flex-start;">
+
+      <!-- Cover -->
+      <div id="dm-cover" style="flex-shrink:0; width:100px; border-radius:var(--radius-sm);
+                                 overflow:hidden; aspect-ratio:2/3; position:relative;
+                                 display:flex; align-items:center; justify-content:center;">
+      </div>
+
+      <!-- Info -->
+      <div style="flex:1; min-width:0;">
+        <div id="dm-author"  style="font-size:0.9375rem; color:var(--color-gray-600); margin-bottom:0.5rem;"></div>
+        <div id="dm-badge"   style="margin-bottom:0.75rem;"></div>
+        <div id="dm-isbn"    style="font-size:0.8125rem; color:var(--color-gray-500); margin-bottom:0.75rem;"></div>
+        <div id="dm-summary" style="font-size:0.875rem; color:var(--color-gray-700);
+                                    line-height:1.6; white-space:pre-wrap;"></div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
 <script type="module">
 import { subscribeToBooks, filterBooks } from './js/books.js';
-import { escHtml }                       from './js/ui.js';
+import { escHtml, openModal, closeModal, initModalDismiss } from './js/ui.js';
 
 // ── Cover image ───────────────────────────────────────────────────────────────
 // Uses Open Library's free cover API when an ISBN is available.
@@ -195,6 +226,11 @@ function placeholderColor(title) {
   for (const c of (title || '')) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
   return COLORS[Math.abs(h) % COLORS.length];
 }
+
+// ── Detail modal setup ────────────────────────────────────────────────────────
+const detailModal = document.getElementById('detail-modal');
+initModalDismiss(detailModal);
+document.getElementById('dm-close').addEventListener('click', () => closeModal(detailModal));
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _allBooks = [];
@@ -248,7 +284,7 @@ function renderGrid(books) {
       : 'Checked out';
 
     return `
-      <div class="book-card-catalog">
+      <div class="book-card-catalog" data-id="${book.id}" style="cursor:pointer">
         <div class="book-cover" style="background-color:${color}">
           <span class="book-cover-initial">${escHtml(initial)}</span>
           ${coverUrl
@@ -263,6 +299,53 @@ function renderGrid(books) {
         </div>
       </div>`;
   }).join('');
+}
+
+// ── Book card click → detail modal ────────────────────────────────────────────
+document.getElementById('book-grid').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-id]');
+  if (!card) return;
+  const book = _allBooks.find(b => b.id === card.dataset.id);
+  if (book) openDetailModal(book);
+});
+
+function openDetailModal(book) {
+  const color    = placeholderColor(book.title);
+  const initial  = (book.title || '?')[0].toUpperCase();
+  const coverUrl = book.isbn
+    ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(book.isbn)}-L.jpg`
+    : null;
+
+  const avail      = book.availableCopies > 0;
+  const badgeCls   = avail ? 'badge-available' : 'badge-checked-out';
+  const badgeLabel = avail
+    ? (book.totalCopies > 1
+        ? `Available (${book.availableCopies} of ${book.totalCopies} copies)`
+        : 'Available')
+    : (book.totalCopies > 1
+        ? `All ${book.totalCopies} copies checked out`
+        : 'Checked out');
+
+  document.getElementById('dm-title').textContent  = book.title;
+  document.getElementById('dm-author').textContent = book.author;
+  document.getElementById('dm-badge').innerHTML    = `<span class="badge ${badgeCls}">${badgeLabel}</span>`;
+  document.getElementById('dm-isbn').textContent   = book.isbn ? `ISBN: ${book.isbn}` : '';
+  document.getElementById('dm-summary').textContent = book.summary || '';
+
+  // Cover
+  const coverEl = document.getElementById('dm-cover');
+  coverEl.style.backgroundColor = color;
+  coverEl.innerHTML = `<span style="font-size:2rem; font-weight:800;
+                                    color:rgba(255,255,255,0.75); position:relative; z-index:0;">
+                         ${escHtml(initial)}
+                       </span>
+                       ${coverUrl
+                         ? `<img src="${coverUrl}" alt="${escHtml(book.title)}"
+                                 onerror="this.remove()"
+                                 style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;" />`
+                         : ''}`;
+
+  openModal(detailModal);
 }
 </script>
 

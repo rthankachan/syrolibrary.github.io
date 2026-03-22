@@ -108,6 +108,12 @@
           Currently checked out copies will be preserved. Available copies will be recalculated.
         </p>
       </div>
+      <div class="form-group">
+        <label class="form-label" for="f-summary">Summary / Details <span class="text-muted">(optional)</span></label>
+        <textarea id="f-summary" class="form-input" rows="4"
+                  placeholder="Brief description of the book…"
+                  style="resize:vertical; line-height:1.5"></textarea>
+      </div>
       <p id="modal-error" class="text-danger mt-2" hidden></p>
     </div>
 
@@ -240,6 +246,7 @@ function openBookModal(book) {
   document.getElementById('f-author').value           = book?.author  ?? '';
   document.getElementById('f-isbn').value             = book?.isbn    ?? '';
   document.getElementById('f-copies').value           = book?.totalCopies ?? 1;
+  document.getElementById('f-summary').value          = book?.summary ?? '';
   document.getElementById('f-copies-hint').hidden     = !book;
   document.getElementById('modal-error').hidden       = true;
   document.getElementById('modal-save').disabled      = false;
@@ -254,10 +261,11 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   const saveBtn  = document.getElementById('modal-save');
   errorEl.hidden = true;
 
-  const title      = document.getElementById('f-title').value.trim();
-  const author     = document.getElementById('f-author').value.trim();
-  const isbn       = document.getElementById('f-isbn').value.trim();
+  const title       = document.getElementById('f-title').value.trim();
+  const author      = document.getElementById('f-author').value.trim();
+  const isbn        = document.getElementById('f-isbn').value.trim();
   const totalCopies = parseInt(document.getElementById('f-copies').value, 10);
+  const summary     = document.getElementById('f-summary').value.trim();
 
   if (!title)              { return showFieldError(errorEl, 'Title is required.'); }
   if (!author)             { return showFieldError(errorEl, 'Author is required.'); }
@@ -268,10 +276,10 @@ document.getElementById('modal-save').addEventListener('click', async () => {
 
   try {
     if (_editingBook) {
-      await updateBook(_editingBook.id, { title, author, isbn, totalCopies }, _editingBook);
+      await updateBook(_editingBook.id, { title, author, isbn, totalCopies, summary }, _editingBook);
       showToast('Book updated.', 'success');
     } else {
-      await addBook({ title, author, isbn, totalCopies });
+      await addBook({ title, author, isbn, totalCopies, summary });
       showToast(`"${title}" added.`, 'success');
     }
     closeModal(bookModal);
