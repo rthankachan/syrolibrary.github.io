@@ -46,11 +46,12 @@ export function getAvailabilityBadge(book) {
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
-export async function addBook({ title, author, isbn, totalCopies, summary, imageUrl, labels }) {
+export async function addBook({ title, author, isbn, totalCopies, category, summary, imageUrl, labels }) {
   return addDoc(collection(db, 'books'), {
     title:           title.trim(),
     author:          author.trim(),
     isbn:            isbn.trim(),
+    category:        category?.trim() || '',
     summary:         summary.trim(),
     imageUrl:        imageUrl?.trim() || '',
     labels:          labels ?? [],
@@ -66,13 +67,14 @@ export async function addBook({ title, author, isbn, totalCopies, summary, image
 // Recalculates availableCopies when totalCopies changes:
 //   checkedOut = old totalCopies − old availableCopies
 //   new available = new totalCopies − checkedOut  (floored at 0)
-export async function updateBook(id, { title, author, isbn, totalCopies, summary, imageUrl, labels }, currentBook) {
+export async function updateBook(id, { title, author, isbn, totalCopies, category, summary, imageUrl, labels }, currentBook) {
   const checkedOut   = currentBook.totalCopies - currentBook.availableCopies;
   const newAvailable = Math.max(0, totalCopies - checkedOut);
   return updateDoc(doc(db, 'books', id), {
     title:           title.trim(),
     author:          author.trim(),
     isbn:            isbn.trim(),
+    category:        category?.trim() || '',
     summary:         summary.trim(),
     imageUrl:        imageUrl?.trim() || '',
     labels:          labels ?? [],

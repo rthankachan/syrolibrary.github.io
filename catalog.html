@@ -25,6 +25,41 @@
     .catalog-brand span { color: var(--color-primary); }
 
 
+    /* ── Category tabs ────────────────────────────────────────────────────── */
+    .category-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--color-gray-200);
+      margin-top: 1rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .category-tabs::-webkit-scrollbar { display: none; }
+    .category-tab {
+      padding: 0.5rem 1.125rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--color-gray-500);
+      cursor: pointer;
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+    .category-tab:hover { color: var(--color-gray-800); }
+    .category-tab.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+      font-weight: 600;
+    }
+    .category-tab-count {
+      font-size: 0.75rem;
+      opacity: 0.65;
+      margin-left: 0.3rem;
+    }
+
     /* ── Label filter bar ─────────────────────────────────────────────────── */
     .label-bar {
       display: flex;
@@ -193,6 +228,9 @@
     />
   </div>
 
+  <!-- Category tabs -->
+  <div id="category-tabs" class="category-tabs" hidden></div>
+
   <!-- Label filter pills -->
   <div id="label-bar" class="label-bar" hidden></div>
 
@@ -338,9 +376,10 @@ function coverImgTag(book, size = 'M', loading = 'lazy') {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let _allBooks      = [];
-let _activeLabel   = null;
-let _viewMode      = 'grid';
+let _allBooks        = [];
+let _activeCategory  = null;  // null = All
+let _activeLabel     = null;
+let _viewMode        = 'grid';
 let _staffUser     = null;
 let _currentBook   = null;
 let _selectedStudent = null;
@@ -370,6 +409,7 @@ initAuth({
 // ── Subscribe ─────────────────────────────────────────────────────────────────
 subscribeToBooks((books) => {
   _allBooks = books;
+  renderCategoryTabs();
   renderLabelBar();
   render();
   document.getElementById('loading').hidden        = true;
@@ -400,13 +440,42 @@ function setView(mode) {
 // ── Filtered list ─────────────────────────────────────────────────────────────
 function getFiltered() {
   let books = filterBooks(_allBooks, document.getElementById('search-input').value.trim());
-  if (_activeLabel) books = books.filter(b => Array.isArray(b.labels) && b.labels.includes(_activeLabel));
+  if (_activeCategory) books = books.filter(b => b.category === _activeCategory);
+  if (_activeLabel)    books = books.filter(b => Array.isArray(b.labels) && b.labels.includes(_activeLabel));
   return books;
 }
 
+// ── Category tabs ─────────────────────────────────────────────────────────────
+function renderCategoryTabs() {
+  const cats = [...new Set(_allBooks.map(b => b.category).filter(Boolean))].sort();
+  const bar  = document.getElementById('category-tabs');
+  if (!cats.length) { bar.hidden = true; return; }
+
+  bar.hidden = false;
+  const allCount = _allBooks.length;
+  bar.innerHTML = [{ key: null, label: 'All', count: allCount },
+    ...cats.map(c => ({ key: c, label: c, count: _allBooks.filter(b => b.category === c).length }))
+  ].map(({ key, label, count }) => `
+    <button class="category-tab${_activeCategory === key ? ' active' : ''}"
+            data-cat="${key ?? ''}">
+      ${escHtml(label)}<span class="category-tab-count">${count}</span>
+    </button>`).join('');
+}
+
+document.getElementById('category-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.category-tab');
+  if (!tab) return;
+  _activeCategory = tab.dataset.cat || null;
+  _activeLabel    = null; // reset label filter when switching category
+  renderCategoryTabs();
+  renderLabelBar();
+  render();
+});
+
 // ── Label bar ─────────────────────────────────────────────────────────────────
 function renderLabelBar() {
-  const allLabels = [...new Set(_allBooks.flatMap(b => b.labels ?? []))].sort();
+  const scope     = _activeCategory ? _allBooks.filter(b => b.category === _activeCategory) : _allBooks;
+  const allLabels = [...new Set(scope.flatMap(b => b.labels ?? []))].sort();
   const bar = document.getElementById('label-bar');
   if (!allLabels.length) { bar.hidden = true; return; }
   bar.hidden = false;

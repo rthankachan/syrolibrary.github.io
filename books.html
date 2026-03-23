@@ -102,6 +102,18 @@
         <input id="f-isbn" class="form-input" type="text" placeholder="e.g. 9780064400558" autocomplete="off" />
       </div>
       <div class="form-group">
+        <label class="form-label" for="f-category">Category <span class="text-muted">(optional)</span></label>
+        <input id="f-category" class="form-input" type="text" list="category-suggestions"
+               placeholder="e.g. CCD, Malayalam, General…" autocomplete="off" />
+        <datalist id="category-suggestions">
+          <option value="CCD">
+          <option value="Malayalam">
+          <option value="General">
+          <option value="Children">
+          <option value="Youth">
+        </datalist>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="f-copies">Total Copies <span style="color:var(--color-danger)">*</span></label>
         <input id="f-copies" class="form-input" type="number" min="1" max="99" value="1" />
         <p class="form-hint" id="f-copies-hint" hidden>
@@ -299,6 +311,7 @@ function openBookModal(book) {
   document.getElementById('f-author').value           = book?.author  ?? '';
   document.getElementById('f-isbn').value             = book?.isbn    ?? '';
   document.getElementById('f-copies').value           = book?.totalCopies ?? 1;
+  document.getElementById('f-category').value         = book?.category ?? '';
   document.getElementById('f-summary').value          = book?.summary  ?? '';
   document.getElementById('f-image-url').value        = book?.imageUrl ?? '';
   document.getElementById('f-copies-hint').hidden     = !book;
@@ -322,6 +335,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   const author      = document.getElementById('f-author').value.trim();
   const isbn        = document.getElementById('f-isbn').value.trim();
   const totalCopies = parseInt(document.getElementById('f-copies').value, 10);
+  const category    = document.getElementById('f-category').value.trim();
   const summary     = document.getElementById('f-summary').value.trim();
   const imageUrl    = document.getElementById('f-image-url').value.trim();
 
@@ -334,10 +348,10 @@ document.getElementById('modal-save').addEventListener('click', async () => {
 
   try {
     if (_editingBook) {
-      await updateBook(_editingBook.id, { title, author, isbn, totalCopies, summary, imageUrl, labels: _editingLabels }, _editingBook);
+      await updateBook(_editingBook.id, { title, author, isbn, totalCopies, category, summary, imageUrl, labels: _editingLabels }, _editingBook);
       showToast('Book updated.', 'success');
     } else {
-      await addBook({ title, author, isbn, totalCopies, summary, imageUrl, labels: _editingLabels });
+      await addBook({ title, author, isbn, totalCopies, category, summary, imageUrl, labels: _editingLabels });
       showToast(`"${title}" added.`, 'success');
     }
     closeModal(bookModal);
