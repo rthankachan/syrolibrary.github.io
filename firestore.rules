@@ -38,7 +38,10 @@ service cloud.firestore {
         (request.auth.uid == userId || isAdmin());
 
       // User creates their own doc on first login (converting an invitation)
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      // Invitation must exist server-side — prevents self-granting any role
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && exists(/databases/$(database)/documents/invitations/$(request.auth.token.email.lower()));
 
       // User can only update their own lastLoginAt; admin can update anything
       allow update: if isAuthenticated() && request.auth.uid == userId &&
