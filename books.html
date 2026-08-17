@@ -16,6 +16,27 @@
     }
   }
   </script>
+
+  <style>
+    .isbn-input-row { display: flex; gap: 0.5rem; }
+    .isbn-input-row .form-input { flex: 1; }
+
+    #scan-reader {
+      width: 100%;
+      min-height: 220px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: #000;
+    }
+    #scan-reader video { border-radius: var(--radius-md); }
+
+    .scan-hint {
+      text-align: center;
+      font-size: 0.875rem;
+      color: var(--color-gray-500);
+      margin-top: 0.75rem;
+    }
+  </style>
 </head>
 <body>
 
@@ -43,7 +64,10 @@
 
   <div class="page-header">
     <h1 class="page-title">Manage Books</h1>
-    <button id="add-book-btn" class="btn btn-primary" type="button">+ Add Book</button>
+    <div style="display:flex; gap:0.5rem;">
+      <button id="scan-isbn-btn" class="btn btn-ghost" type="button">Scan ISBN</button>
+      <button id="add-book-btn" class="btn btn-primary" type="button">+ Add Book</button>
+    </div>
   </div>
 
   <div class="search-bar">
@@ -100,7 +124,11 @@
       </div>
       <div class="form-group">
         <label class="form-label" for="f-isbn">ISBN <span class="text-muted">(optional)</span></label>
-        <input id="f-isbn" class="form-input" type="text" placeholder="e.g. 9780064400558" autocomplete="off" />
+        <div class="isbn-input-row">
+          <input id="f-isbn" class="form-input" type="text" placeholder="e.g. 9780064400558" autocomplete="off" />
+          <button type="button" id="f-isbn-scan" class="btn btn-ghost btn-sm" style="white-space:nowrap;"
+                  title="Scan barcode">Scan</button>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label" for="f-category">Category <span class="text-muted">(optional)</span></label>
@@ -156,12 +184,33 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
+     ISBN Scanner Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="scan-modal" class="modal-overlay" hidden>
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Scan ISBN barcode</h2>
+      <button class="modal-close" id="scan-close" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="modal-body" style="padding-top:0.75rem;">
+      <div id="scan-reader"></div>
+      <p class="scan-hint" id="scan-status">Point your camera at the barcode on the back cover.</p>
+      <p id="scan-error" class="text-danger mt-2 text-center" hidden></p>
+    </div>
+    <div class="modal-footer">
+      <button id="scan-cancel" class="btn btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
      Page Script
      ═══════════════════════════════════════════════════════════════════════════ -->
 <script type="module">
 import { requireAuth, signOutUser }                    from './js/auth.js';
 import { subscribeToBooks, filterBooks,
          addBook, updateBook, deleteBook }              from './js/books.js';
+import { IsbnScanner, lookupIsbn, normalizeIsbn }      from './js/isbn-scan.js';
 import { showToast, openModal, closeModal,
          initModalDismiss, escHtml }                    from './js/ui.js';
 
@@ -177,6 +226,103 @@ document.getElementById('signout-btn').addEventListener('click', signOutUser);
 let _allBooks      = [];
 let _editingBook   = null; // null = adding, object = editing
 let _editingLabels = [];   // current label chips in modal
+let _isbnScanner   = null;
+let _afterScan     = null; // callback once lookup finishes (e.g. reopen add modal)
+
+// ── Duplicate ISBN check ──────────────────────────────────────────────────────
+function findByIsbn(isbn, excludeId = null) {
+  const n = normalizeIsbn(isbn);
+  if (!n) return null;
+  return _allBooks.find(b => {
+    if (excludeId && b.id === excludeId) return false;
+    return normalizeIsbn(b.isbn) === n;
+  }) || null;
+}
+
+function fillBookForm(meta) {
+  if (meta.title)    document.getElementById('f-title').value    = meta.title;
+  if (meta.author)   document.getElementById('f-author').value   = meta.author;
+  if (meta.isbn)     document.getElementById('f-isbn').value     = meta.isbn;
+  if (meta.summary)  document.getElementById('f-summary').value  = meta.summary;
+  if (meta.imageUrl) document.getElementById('f-image-url').value = meta.imageUrl;
+}
+
+async function handleIsbnScanned(isbn) {
+  await closeScanModal();
+
+  const dup = findByIsbn(isbn, _editingBook?.id);
+  if (dup) {
+    showToast(`Already in catalog: "${dup.title}"`, 'error');
+    if (confirm(`"${dup.title}" is already in the catalog.\nOpen it to edit?`)) {
+      openBookModal(dup);
+    }
+    return;
+  }
+
+  const reopen = _afterScan;
+  _afterScan = null;
+
+  showToast('Looking up book details…');
+  try {
+    const meta = await lookupIsbn(isbn);
+    if (reopen) reopen();
+    else openBookModal(null);
+    fillBookForm(meta);
+    showToast('Details loaded — review and save.', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'Lookup failed.', 'error');
+    if (reopen) reopen();
+    else openBookModal(null);
+    document.getElementById('f-isbn').value = normalizeIsbn(isbn);
+  }
+}
+
+// ── ISBN scanner modal ────────────────────────────────────────────────────────
+const scanModal = document.getElementById('scan-modal');
+document.getElementById('scan-close').addEventListener('click',  () => closeScanModal());
+document.getElementById('scan-cancel').addEventListener('click', () => closeScanModal());
+scanModal.addEventListener('click', (e) => {
+  if (e.target === scanModal) closeScanModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !scanModal.hidden) closeScanModal();
+});
+
+async function openScanModal({ afterScan } = {}) {
+  _afterScan = afterScan || null;
+  document.getElementById('scan-error').hidden = true;
+  document.getElementById('scan-status').textContent =
+    'Point your camera at the barcode on the back cover.';
+  openModal(scanModal);
+
+  _isbnScanner = new IsbnScanner('scan-reader');
+  try {
+    await _isbnScanner.start(handleIsbnScanned);
+  } catch (err) {
+    console.error(err);
+    const msg = err.name === 'NotAllowedError'
+      ? 'Camera access was denied. Allow camera permission and try again.'
+      : 'Could not start the camera on this device.';
+    document.getElementById('scan-error').textContent = msg;
+    document.getElementById('scan-error').hidden = false;
+    document.getElementById('scan-status').textContent = '';
+  }
+}
+
+async function closeScanModal() {
+  if (_isbnScanner) await _isbnScanner.stop();
+  _isbnScanner = null;
+  _afterScan   = null;
+  closeModal(scanModal);
+}
+
+document.getElementById('scan-isbn-btn').addEventListener('click', () => openScanModal());
+
+document.getElementById('f-isbn-scan').addEventListener('click', () => {
+  closeModal(bookModal);
+  openScanModal({ afterScan: () => openModal(bookModal) });
+});
 
 // ── Label chip helpers ────────────────────────────────────────────────────────
 function renderLabelChips() {
