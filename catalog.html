@@ -357,7 +357,7 @@
 import { subscribeToBooks, filterBooks }                      from './js/books.js';
 import { escHtml, openModal, closeModal,
          initModalDismiss, showToast, formatDate }            from './js/ui.js';
-import { initAuth, signOutUser, STAFF_ROLES }                 from './js/auth.js';
+import { initAuth, signOutUser }                             from './js/auth.js?v=2';
 import { loadStudents, searchStudents }                       from './js/students.js';
 import { getActiveCheckoutsForBook, checkoutBook,
          checkinBook, getOverdueStatus }                      from './js/checkouts.js';
@@ -395,7 +395,7 @@ let _typeaheadHits   = [];
 // Parishioners signed in through the donation drive fall through to the public
 // view, since they have no library operations to perform here.
 initAuth({
-  requiredRole: STAFF_ROLES,
+  staffOnly: true,
   onAuthorized: async (user) => {
     _staffUser = user;
     document.getElementById('catalog-header').hidden = true;

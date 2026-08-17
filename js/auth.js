@@ -115,10 +115,13 @@ export async function signOutUser() {
 //   onUnauthorized(reason)   — 'unauthenticated' | 'no-access' | 'wrong-role' | 'error'
 //   requiredRole             — a role or array of roles allowed on this page
 //                              (default: any role, including 'parishioner')
+//   staffOnly                — shorthand for requiredRole: STAFF_ROLES
 //
 // Returns the Firebase unsubscribe function in case you need to stop listening.
 // ─────────────────────────────────────────────────────────────────────────────
-export function initAuth({ onAuthorized, onUnauthorized, requiredRole = null }) {
+export function initAuth({ onAuthorized, onUnauthorized, requiredRole = null, staffOnly = false }) {
+  const effectiveRole = staffOnly ? STAFF_ROLES : requiredRole;
+
   const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
     if (!firebaseUser) {
       _userData = null;
@@ -137,8 +140,8 @@ export function initAuth({ onAuthorized, onUnauthorized, requiredRole = null }) 
         return;
       }
 
-      const allowedRoles = requiredRole
-        ? (Array.isArray(requiredRole) ? requiredRole : [requiredRole])
+      const allowedRoles = effectiveRole
+        ? (Array.isArray(effectiveRole) ? effectiveRole : [effectiveRole])
         : null;
 
       if (allowedRoles && !allowedRoles.includes(userData.role)) {
