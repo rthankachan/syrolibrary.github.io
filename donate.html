@@ -117,12 +117,21 @@
       margin-bottom: 1.5rem;
     }
     .pledge-panel h2 { font-size: 0.9375rem; margin-bottom: 0.75rem; }
-    .pledge-item {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 0.75rem; padding: 0.5rem 0; font-size: 0.875rem;
-      border-top: 1px solid var(--color-gray-100);
+    #pledge-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .pledge-card {
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      padding: 0.875rem 1rem;
+      background: var(--color-gray-50);
     }
-    .pledge-item:first-of-type { border-top: none; }
+    .pledge-card-foot {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; margin-top: 0.75rem; padding-top: 0.625rem;
+      border-top: 1px solid var(--color-gray-200);
+    }
+    .pledge-status-line {
+      font-size: 0.75rem; color: var(--color-gray-500); margin-top: 0.375rem;
+    }
 
     .checkbox-row { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.875rem; }
     .checkbox-row input { margin-top: 0.2rem; }
@@ -295,7 +304,7 @@
      Page Script
      ═══════════════════════════════════════════════════════════════════════════ -->
 <script type="module">
-import { initAuth, signInWithGoogle, signOutUser }        from './js/auth.js';
+import { initAuth, signInWithGoogle, signOutUser, isStaff }        from './js/auth.js';
 import { subscribeToDonationBooks, subscribeToDonationClaims,
          claimBook, cancelClaim }                          from './js/donations.js?v=2';
 import { escHtml, showToast, openModal, closeModal,
@@ -319,7 +328,7 @@ initAuth({
     const userEl = document.getElementById('header-user');
     userEl.textContent = user.name || user.email;
     userEl.hidden = false;
-    document.getElementById('admin-link').hidden = user.role !== 'admin';
+    document.getElementById('admin-link').hidden = !isStaff(user);
 
     closeModal(document.getElementById('signin-modal'));
     render();
@@ -458,12 +467,6 @@ function renderCard(book) {
   const names     = donorNames(book.id);
   const mine      = _user && claimsFor(book.id).some(c => c.donorUid === _user.uid);
 
-  const tags = [
-    book.ageRange   && `Ages ${escHtml(book.ageRange)}`,
-    book.condition  && escHtml(book.condition),
-    book.denomination && escHtml(book.denomination.split('.')[0]),
-  ].filter(Boolean).map(t => `<span class="donate-tag">${t}</span>`).join('');
-
   const action = remaining > 0
     ? `<button class="btn btn-primary btn-sm pledge-btn" data-id="${book.id}">
          ${mine ? 'Donate another' : "I'll donate this"}
@@ -476,27 +479,47 @@ function renderCard(book) {
 
   return `
     <article class="donate-card${remaining === 0 ? ' is-claimed' : ''}">
-      <div class="donate-title">${escHtml(book.title)}</div>
-      ${book.author ? `<div class="donate-author">${escHtml(book.author)}</div>` : ''}
-      <div class="donate-tags">${tags}</div>
-      <div class="donate-meta">
-        ${book.publisher ? escHtml(book.publisher) + '<br />' : ''}
-        ${book.qty > 1 ? `${remaining} of ${book.qty} copies still needed` : ''}
-      </div>
+      ${bookDetailsHtml(book)}
+      ${book.qty > 1 ? `<div class="donate-meta">${remaining} of ${book.qty} copies still needed</div>` : ''}
       ${donors}
       <div class="donate-foot">
-        <div>
-          <div class="donate-price">${book.unitPrice
-            ? `$${book.unitPrice.toFixed(2)}`
-            : '<span class="text-muted" style="font-weight:500">Price varies</span>'}</div>
-          ${book.purchaseUrl
-            ? `<a href="${escHtml(book.purchaseUrl)}" target="_blank" rel="noopener"
-                  style="font-size:0.75rem;">Where to buy →</a>`
-            : ''}
-        </div>
+        <div>${bookPriceBlockHtml(book)}</div>
         ${action}
       </div>
     </article>`;
+}
+
+function bookTagsHtml(book) {
+  if (!book) return '';
+  const tags = [
+    book.ageRange      && `Ages ${escHtml(book.ageRange)}`,
+    book.condition     && escHtml(book.condition),
+    book.denomination  && escHtml(String(book.denomination).split('.')[0]),
+  ].filter(Boolean);
+  return tags.length
+    ? `<div class="donate-tags">${tags.map(t => `<span class="donate-tag">${t}</span>`).join('')}</div>`
+    : '';
+}
+
+function bookPriceBlockHtml(book) {
+  if (!book) return '';
+  const price = book.unitPrice
+    ? `$${book.unitPrice.toFixed(2)}`
+    : '<span class="text-muted" style="font-weight:500">Price varies</span>';
+  const link = book.purchaseUrl
+    ? `<a href="${escHtml(book.purchaseUrl)}" target="_blank" rel="noopener"
+          style="font-size:0.75rem;">Where to buy →</a>`
+    : '';
+  return `<div class="donate-price">${price}</div>${link}`;
+}
+
+function bookDetailsHtml(book) {
+  if (!book) return '';
+  return `
+    <div class="donate-title">${escHtml(book.title)}</div>
+    ${book.author ? `<div class="donate-author">${escHtml(book.author)}</div>` : ''}
+    ${bookTagsHtml(book)}
+    ${book.publisher ? `<div class="donate-meta">${escHtml(book.publisher)}</div>` : ''}`;
 }
 
 function renderPledgePanel() {
@@ -510,20 +533,31 @@ function renderPledgePanel() {
   if (!mine.length) { panel.hidden = true; return; }
 
   panel.hidden = false;
-  document.getElementById('pledge-list').innerHTML = mine.map(c => `
-    <div class="pledge-item">
-      <div>
-        <div style="font-weight:500">${escHtml(c.bookTitle)}</div>
-        <div class="text-muted" style="font-size:0.75rem;">
+  document.getElementById('pledge-list').innerHTML = mine.map(c => {
+    const book = _books.find(b => b.id === c.bookId);
+    const action = c.status === 'received'
+      ? '<span class="badge badge-available">Received</span>'
+      : `<button class="btn btn-ghost btn-sm cancel-pledge-btn" data-id="${c.id}">Cancel</button>`;
+
+    return `
+      <article class="pledge-card">
+        ${book
+          ? bookDetailsHtml(book)
+          : `<div class="donate-title">${escHtml(c.bookTitle)}</div>`}
+        <div class="pledge-status-line">
           ${c.qty > 1 ? `${c.qty} copies · ` : ''}
           ${c.status === 'received' ? 'Received — thank you!' : 'Pledged'}
           ${c.anonymous ? ' · shown as Anonymous' : ''}
         </div>
-      </div>
-      ${c.status === 'received'
-        ? '<span class="badge badge-available">Received</span>'
-        : `<button class="btn btn-ghost btn-sm cancel-pledge-btn" data-id="${c.id}">Cancel</button>`}
-    </div>`).join('');
+        <p class="form-hint" style="margin-top:0.375rem;">
+          Buy the book using the link below, then drop it off at <strong>Room #215</strong> on a Sunday.
+        </p>
+        <div class="pledge-card-foot">
+          <div>${book ? bookPriceBlockHtml(book) : ''}</div>
+          ${action}
+        </div>
+      </article>`;
+  }).join('');
 }
 
 // ── Pledge actions ────────────────────────────────────────────────────────────

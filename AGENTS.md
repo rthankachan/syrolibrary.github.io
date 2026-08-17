@@ -54,7 +54,7 @@ Every HTML page declares an `<script type="importmap">` that maps `firebase/app`
 - `students.html` — admin: add/edit/delete students.
 - `volunteers.html` — admin: manage volunteer accounts and pending invitations.
 - `donate.html` — public book donation drive. Anyone browses; signing in with Google claims a book.
-- `donations-admin.html` — admin: import the drive spreadsheet, see donor contact details, mark books received.
+- `donations-admin.html` — staff: import the drive spreadsheet, see donor contact details, mark books received, edit the wishlist.
 - `index.html` — immediate redirect to `catalog.html`.
 
 ### Auth and access model

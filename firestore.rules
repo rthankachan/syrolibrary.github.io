@@ -90,11 +90,11 @@ service cloud.firestore {
 
     // ── /donationBooks/{bookId} ────────────────────────────────────────────
     // The donation drive wishlist. Public so parishioners can browse before
-    // signing in; only admins add or edit entries (CSV import).
+    // signing in; staff import, edit, and delete entries.
     match /donationBooks/{bookId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin();
+      allow create, delete: if isAuthorized();
+      allow update: if isAuthorized();
       // A signed-in parishioner pledging or cancelling only moves the counter,
       // and never past the number of copies the library asked for.
       allow update: if isAuthenticated() &&
@@ -114,22 +114,22 @@ service cloud.firestore {
         && request.resource.data.status == 'pledged'
         && request.resource.data.qty is int
         && request.resource.data.qty > 0;
-      // Donors may withdraw; admins may also mark a book as received
-      allow delete: if isAdmin() ||
+      // Staff mark received or remove pledges; donors may withdraw their own
+      allow delete: if isAuthorized() ||
         (isAuthenticated() && resource.data.donorUid == request.auth.uid);
-      allow update: if isAdmin() &&
+      allow update: if isAuthorized() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
     }
 
     // ── /donationContacts/{claimId} ────────────────────────────────────────
-    // Donor name, email and phone. Readable only by the donor and admins,
+    // Donor name, email and phone. Readable by staff and the donor only,
     // which is what lets a pledge be publicly anonymous but still traceable.
     match /donationContacts/{claimId} {
-      allow read: if isAdmin() ||
+      allow read: if isAuthorized() ||
         (isAuthenticated() && resource.data.donorUid == request.auth.uid);
       allow create: if isAuthenticated()
         && request.resource.data.donorUid == request.auth.uid;
-      allow delete: if isAdmin() ||
+      allow delete: if isAuthorized() ||
         (isAuthenticated() && resource.data.donorUid == request.auth.uid);
     }
   }

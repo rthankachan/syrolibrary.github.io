@@ -214,7 +214,7 @@
   <a href="catalog.html"    class="nav-link active">Catalog</a>
   <a href="students.html"   class="nav-link admin-only" hidden>Students</a>
   <a href="books.html"      class="nav-link admin-only" hidden>Manage Books</a>
-  <a href="donations-admin.html" class="nav-link admin-only" hidden>Donation Drive</a>
+  <a href="donations-admin.html" class="nav-link staff-only" hidden>Donation Drive</a>
   <a href="volunteers.html" class="nav-link admin-only" hidden>Volunteers</a>
   <div class="nav-divider"></div>
   <span class="nav-user" id="nav-user"></span>
@@ -402,6 +402,7 @@ initAuth({
     document.getElementById('staff-nav').hidden       = false;
     document.getElementById('nav-user').innerHTML =
       `${escHtml(user.name || user.email)} <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
+    document.querySelectorAll('.staff-only').forEach(el => el.hidden = false);
     if (user.role === 'admin') {
       document.querySelectorAll('.admin-only').forEach(el => el.hidden = false);
     }
