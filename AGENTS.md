@@ -81,7 +81,7 @@ Roles:
 
 The donation drive splits public and private data across two collections on purpose: Firestore rules are per-document, so an anonymous pledge stays anonymous only because the donor's name never enters the publicly readable `donationClaims` doc. Never denormalise contact details into `donationClaims`.
 
-The initial wishlist ships as `data/donation-booklist.csv`; an admin loads it once from the import panel on `donations-admin.html`.
+The initial wishlist can be seeded from `data/donation-booklist.csv` via the CSV upload panel on `donations-admin.html`.
 
 `firestore.indexes.json` defines three composite indexes on `checkouts`: `(status, dueDate)`, `(studentId, status, checkedOutAt DESC)`, and `(bookId, status)`. Any new compound query that isn't covered by these indexes will fail in production and requires a new entry there.
 

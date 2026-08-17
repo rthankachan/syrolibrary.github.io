@@ -106,11 +106,6 @@
       <input type="file" id="csv-input" accept=".csv,text/csv" hidden />
     </div>
 
-    <p class="form-hint mt-2">
-      Starting fresh? <a href="#" id="load-starter">Load the parish starter list</a>
-      (the original drive spreadsheet, bundled with the site).
-    </p>
-
     <div id="import-preview" class="mt-4" hidden>
       <p id="import-summary" style="font-size:0.875rem;"></p>
       <div class="table-wrapper mt-2" style="max-height:260px; overflow:auto;">
@@ -260,7 +255,7 @@ import { requireAuth, signOutUser }                        from './js/auth.js';
 import { subscribeToDonationBooks, subscribeToDonationClaims,
          getDonationContacts, setClaimStatus, cancelClaim,
          deleteDonationBook, updateDonationBook, parseCsv, normalizeDonationRows,
-         importDonationBooks, toCsv, downloadCsv }          from './js/donations.js';
+         importDonationBooks, toCsv, downloadCsv }          from './js/donations.js?v=2';
 import { escHtml, showToast, formatDate, openModal, closeModal,
          initModalDismiss }                                 from './js/ui.js';
 
@@ -563,20 +558,6 @@ dropZone.addEventListener('drop', (e) => {
 });
 csvInput.addEventListener('change', () => {
   if (csvInput.files?.[0]) readFile(csvInput.files[0]);
-});
-
-document.getElementById('load-starter').addEventListener('click', async (e) => {
-  e.preventDefault();
-  importErr.hidden = true;
-  try {
-    const res = await fetch('data/donation-booklist.csv');
-    if (!res.ok) throw new Error('Starter list not found.');
-    stageBooks(await res.text());
-  } catch (err) {
-    console.error(err);
-    importErr.textContent = err.message || 'Could not load the starter list.';
-    importErr.hidden = false;
-  }
 });
 
 async function readFile(file) {
