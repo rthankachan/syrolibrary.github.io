@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project overview
 
-Syro Library is a church library management web app for St. Thomas Syro Malabar Church, Fremont. It is a **static HTML/CSS/JS** site (no build step, no package manager) backed by **Firebase Firestore** and **Firebase Auth**. It is hosted on GitHub Pages and deployed automatically on push to `main`.
+St. Thomas Library is a church library management web app for St. Thomas Syro Malabar Church, Fremont. It is a **static HTML/CSS/JS** site (no build step, no package manager) backed by **Firebase Firestore** and **Firebase Auth**. It is hosted on GitHub Pages and deployed automatically on push to `main`.
 
 ## Common commands
 

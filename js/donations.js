@@ -288,6 +288,47 @@ export async function deleteDonationBook(id) {
   return deleteDoc(doc(db, BOOKS, id));
 }
 
+// Admin: edit a wishlist entry. Qty cannot drop below claimedCount; if the
+// title changes, denormalized bookTitle on pledges is updated too.
+export async function updateDonationBook(id, fields, currentBook) {
+  const title = (fields.title || '').trim();
+  if (!title) throw new Error('Title is required.');
+
+  const qty         = parseInt(fields.qty, 10) || 1;
+  const claimedCount = currentBook.claimedCount || 0;
+  if (qty < claimedCount) {
+    throw new Error(
+      `Qty cannot be less than ${claimedCount} — that many copies are already pledged.`
+    );
+  }
+
+  const data = {
+    title,
+    author:       (fields.author || '').trim(),
+    seq:          parseInt(fields.seq, 10) || currentBook.seq || 0,
+    denomination: (fields.denomination || '').trim(),
+    ageRange:     (fields.ageRange || '').trim(),
+    publisher:    (fields.publisher || '').trim(),
+    condition:    fields.condition || '',
+    unitPrice:    money(String(fields.unitPrice ?? '')),
+    qty,
+    purchaseUrl:  /^https?:\/\//i.test((fields.purchaseUrl || '').trim())
+      ? fields.purchaseUrl.trim() : '',
+    updatedAt:    serverTimestamp(),
+  };
+
+  await updateDoc(doc(db, BOOKS, id), data);
+
+  if (title !== currentBook.title) {
+    const snap = await getDocs(query(collection(db, CLAIMS), where('bookId', '==', id)));
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.update(d.ref, { bookTitle: title }));
+      await batch.commit();
+    }
+  }
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 const csvCell = (v) => {

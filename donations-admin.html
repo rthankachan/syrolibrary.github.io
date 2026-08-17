@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Donation Drive — Syro Library</title>
+  <title>Donation Drive — St. Thomas Library</title>
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
 
@@ -59,7 +59,7 @@
 
 <!-- ── Navigation ─────────────────────────────────────────────────────────── -->
 <nav class="nav" id="nav" hidden>
-  <span class="nav-brand">Syro Library</span>
+  <span class="nav-brand">St. Thomas Library</span>
   <a href="catalog.html"          class="nav-link">Catalog</a>
   <a href="students.html"         class="nav-link">Students</a>
   <a href="books.html"            class="nav-link">Manage Books</a>
@@ -183,13 +183,86 @@
 
 </main>
 
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Edit Book Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="book-modal" class="modal-overlay" hidden>
+  <div class="modal" style="max-width:520px;">
+
+    <div class="modal-header">
+      <h2 class="modal-title">Edit book</h2>
+      <button class="modal-close" id="book-modal-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="f-title">Title <span style="color:var(--color-danger)">*</span></label>
+        <input id="f-title" class="form-input" type="text" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-author">Author</label>
+        <input id="f-author" class="form-input" type="text" autocomplete="off" />
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="f-seq">List #</label>
+          <input id="f-seq" class="form-input" type="number" min="1" />
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="f-qty">Qty needed</label>
+          <input id="f-qty" class="form-input" type="number" min="1" value="1" />
+          <p class="form-hint" id="f-qty-hint" hidden></p>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-denomination">Denomination</label>
+        <input id="f-denomination" class="form-input" type="text" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-age">Category by age</label>
+        <input id="f-age" class="form-input" type="text" placeholder="e.g. 4-8, 12 & up" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-publisher">Publisher</label>
+        <input id="f-publisher" class="form-input" type="text" autocomplete="off" />
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="f-condition">Condition</label>
+          <select id="f-condition" class="form-select">
+            <option value="">Unknown</option>
+            <option value="New">New</option>
+            <option value="Used">Used</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="f-price">Unit price ($)</label>
+          <input id="f-price" class="form-input" type="number" min="0" step="0.01" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-url">Link to purchase</label>
+        <input id="f-url" class="form-input" type="url" placeholder="https://…" autocomplete="off" />
+      </div>
+      <p id="book-modal-error" class="text-danger mt-2" hidden></p>
+    </div>
+
+    <div class="modal-footer">
+      <button id="book-modal-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="book-modal-save"   class="btn btn-primary">Save changes</button>
+    </div>
+
+  </div>
+</div>
+
 <script type="module">
 import { requireAuth, signOutUser }                        from './js/auth.js';
 import { subscribeToDonationBooks, subscribeToDonationClaims,
          getDonationContacts, setClaimStatus, cancelClaim,
-         deleteDonationBook, parseCsv, normalizeDonationRows,
+         deleteDonationBook, updateDonationBook, parseCsv, normalizeDonationRows,
          importDonationBooks, toCsv, downloadCsv }          from './js/donations.js';
-import { escHtml, showToast, formatDate }                   from './js/ui.js';
+import { escHtml, showToast, formatDate, openModal, closeModal,
+         initModalDismiss }                                 from './js/ui.js';
 
 const user = await requireAuth('admin');
 
@@ -203,6 +276,7 @@ let _books    = [];
 let _claims   = [];
 let _contacts = {};
 let _pending  = null;   // parsed books awaiting import confirmation
+let _editingBook = null;
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 subscribeToDonationBooks((books) => {
@@ -361,24 +435,112 @@ function renderBooks() {
       <td>$${(b.unitPrice || 0).toFixed(2)}</td>
       <td>${b.claimedCount || 0} / ${b.qty || 1}</td>
       <td class="td-actions">
-        <button class="btn btn-danger btn-sm book-delete-btn" data-id="${b.id}">Delete</button>
+        <button class="btn btn-ghost btn-sm book-edit-btn" data-id="${b.id}">Edit</button>
+        <button class="btn btn-danger btn-sm book-delete-btn" data-id="${b.id}"
+                style="margin-left:.25rem">Delete</button>
       </td>
     </tr>`).join('');
 }
 
 document.getElementById('books-tbody').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.book-delete-btn');
-  if (!btn) return;
-  const book = _books.find(b => b.id === btn.dataset.id);
+  const editBtn   = e.target.closest('.book-edit-btn');
+  const deleteBtn = e.target.closest('.book-delete-btn');
+
+  if (editBtn) {
+    const book = _books.find(b => b.id === editBtn.dataset.id);
+    if (book) openBookModal(book);
+    return;
+  }
+
+  if (!deleteBtn) return;
+  const book = _books.find(b => b.id === deleteBtn.dataset.id);
   if (!book || !confirm(`Remove "${book.title}" from the donation list?`)) return;
 
-  btn.disabled = true;
+  deleteBtn.disabled = true;
   try {
     await deleteDonationBook(book.id);
     showToast('Book removed from the list.');
   } catch (err) {
     showToast(err.message, 'error');
-    btn.disabled = false;
+    deleteBtn.disabled = false;
+  }
+});
+
+// ── Edit book modal ───────────────────────────────────────────────────────────
+const bookModal = document.getElementById('book-modal');
+initModalDismiss(bookModal);
+document.getElementById('book-modal-close').addEventListener('click',  () => closeModal(bookModal));
+document.getElementById('book-modal-cancel').addEventListener('click', () => closeModal(bookModal));
+
+function openBookModal(book) {
+  _editingBook = book;
+  const claimed = book.claimedCount || 0;
+
+  document.getElementById('f-title').value        = book.title || '';
+  document.getElementById('f-author').value       = book.author || '';
+  document.getElementById('f-seq').value          = book.seq ?? '';
+  document.getElementById('f-qty').value          = book.qty || 1;
+  document.getElementById('f-qty').min            = Math.max(1, claimed);
+  document.getElementById('f-denomination').value = book.denomination || '';
+  document.getElementById('f-age').value          = book.ageRange || '';
+  document.getElementById('f-publisher').value    = book.publisher || '';
+  document.getElementById('f-condition').value    = book.condition || '';
+  document.getElementById('f-price').value        = book.unitPrice ?? '';
+  document.getElementById('f-url').value          = book.purchaseUrl || '';
+
+  const hint = document.getElementById('f-qty-hint');
+  hint.hidden = !claimed;
+  hint.textContent = claimed
+    ? `${claimed} ${claimed === 1 ? 'copy is' : 'copies are'} already pledged — qty cannot go below that.`
+    : '';
+
+  document.getElementById('book-modal-error').hidden = true;
+  const saveBtn = document.getElementById('book-modal-save');
+  saveBtn.disabled    = false;
+  saveBtn.textContent = 'Save changes';
+
+  openModal(bookModal);
+}
+
+document.getElementById('book-modal-save').addEventListener('click', async () => {
+  if (!_editingBook) return;
+
+  const errorEl = document.getElementById('book-modal-error');
+  const saveBtn = document.getElementById('book-modal-save');
+  errorEl.hidden = true;
+
+  const fields = {
+    title:        document.getElementById('f-title').value,
+    author:       document.getElementById('f-author').value,
+    seq:          document.getElementById('f-seq').value,
+    qty:          document.getElementById('f-qty').value,
+    denomination: document.getElementById('f-denomination').value,
+    ageRange:     document.getElementById('f-age').value,
+    publisher:    document.getElementById('f-publisher').value,
+    condition:    document.getElementById('f-condition').value,
+    unitPrice:    document.getElementById('f-price').value,
+    purchaseUrl:  document.getElementById('f-url').value,
+  };
+
+  if (!fields.title.trim()) {
+    errorEl.textContent = 'Title is required.';
+    errorEl.hidden = false;
+    return;
+  }
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Saving…';
+
+  try {
+    await updateDonationBook(_editingBook.id, fields, _editingBook);
+    closeModal(bookModal);
+    showToast('Book updated.', 'success');
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = err.message || 'Save failed. Please try again.';
+    errorEl.hidden = false;
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Save changes';
   }
 });
 
