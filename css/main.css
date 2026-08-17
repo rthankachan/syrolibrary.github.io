@@ -109,14 +109,25 @@ a:hover { text-decoration: underline; }
 }
 
 .brand-icon {
-  height: 32px;
-  width: auto;
   flex-shrink: 0;
   display: block;
+  object-fit: contain;
+}
+
+.catalog-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.catalog-header-brand .brand-icon {
+  height: 2.125rem;
+  width: auto;
 }
 
 .nav-brand.brand-mark .brand-icon {
-  height: 28px;
+  height: 1.125em;
+  width: auto;
 }
 
 .login-title {
@@ -262,16 +273,21 @@ a:hover { text-decoration: underline; }
 }
 
 .catalog-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   font-size: 1.0625rem;
   font-weight: 700;
   color: var(--color-gray-900);
+  line-height: 1.25;
 }
 
-.catalog-brand > span > span {
+.catalog-brand > span {
   color: var(--color-primary);
+}
+
+.catalog-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-gray-500);
+  margin-top: 0.1rem;
+  line-height: 1.25;
 }
 
 .nav-link {
