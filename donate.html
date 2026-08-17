@@ -6,7 +6,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#1a56db" />
   <meta name="description" content="St. Thomas Syro Malabar Church library catalog and book donation drive." />
-  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/icons/church-logo.png" type="image/png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -40,8 +40,6 @@
       top: 0;
       z-index: 100;
     }
-    .catalog-brand { font-size: 1.0625rem; font-weight: 700; color: var(--color-gray-900); }
-    .catalog-brand span { color: var(--color-primary); }
     .header-actions { display: flex; align-items: center; gap: 0.75rem; }
     .header-user {
       font-size: 0.8125rem; color: var(--color-gray-500);
@@ -156,7 +154,10 @@
 <!-- ── Public header ──────────────────────────────────────────────────────── -->
 <header class="catalog-header">
   <div>
-    <div class="catalog-brand">St. Thomas <span>Library</span></div>
+    <div class="catalog-brand brand-mark">
+      <img class="brand-icon" src="/icons/church-logo.png" alt="" aria-hidden="true" />
+      <span>St. Thomas <span>Library</span></span>
+    </div>
     <div style="font-size:0.75rem; color:var(--color-gray-500); margin-top:0.1rem;">
       St. Thomas Syro Malabar Church, Fremont
     </div>

@@ -1,4 +1,4 @@
-const CACHE = 'st-thomas-library-v1';
+const CACHE = 'st-thomas-library-v2';
 
 const PRECACHE = [
   '/',
@@ -23,7 +23,7 @@ const PRECACHE = [
   '/js/ui.js',
   '/js/volunteers.js',
   '/manifest.webmanifest',
-  '/icons/icon.svg',
+  '/icons/church-logo.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];

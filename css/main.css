@@ -96,20 +96,27 @@ a:hover { text-decoration: underline; }
   margin-bottom: 1.25rem;
 }
 
-.login-logo-box {
-  width: 64px;
-  height: 64px;
-  background: var(--color-primary-light);
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.login-logo-img {
+  height: 72px;
+  width: auto;
+  display: block;
 }
 
-.login-logo-box svg {
-  width: 34px;
-  height: 34px;
-  color: var(--color-primary);
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-icon {
+  height: 32px;
+  width: auto;
+  flex-shrink: 0;
+  display: block;
+}
+
+.nav-brand.brand-mark .brand-icon {
+  height: 28px;
 }
 
 .login-title {
@@ -252,6 +259,19 @@ a:hover { text-decoration: underline; }
   color: var(--color-gray-900);
   margin-right: auto;
   flex-shrink: 0;
+}
+
+.catalog-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--color-gray-900);
+}
+
+.catalog-brand > span > span {
+  color: var(--color-primary);
 }
 
 .nav-link {

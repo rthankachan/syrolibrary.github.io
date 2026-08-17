@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="St. Thomas Library">
-  <rect width="512" height="512" rx="96" fill="#1a56db"/>
-  <g fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M160 368A48 48 0 0 1 240 320H384"/>
-    <path d="M240 128H384v320H240A48 48 0 0 1 192 400V176A48 48 0 0 1 240 128z"/>
-  </g>
-</svg>
