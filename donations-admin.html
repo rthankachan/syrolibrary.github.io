@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Donation Drive — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+
+  <style>
+    .panel {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel h2 { font-size: 0.9375rem; margin-bottom: 0.375rem; }
+
+    .stat-row { display: flex; flex-wrap: wrap; gap: 2rem; margin-bottom: 1.5rem; }
+    .stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+    .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--color-gray-500); }
+
+    .drop-zone {
+      border: 2px dashed var(--color-gray-300);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      text-align: center;
+      color: var(--color-gray-500);
+      font-size: 0.875rem;
+      transition: border-color .15s, background .15s;
+      cursor: pointer;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--color-primary);
+      background: var(--color-primary-light);
+    }
+
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--color-gray-200); margin-bottom: 1.25rem; }
+    .tab {
+      padding: 0.5rem 1.125rem; font-size: 0.875rem; font-weight: 500;
+      color: var(--color-gray-500); cursor: pointer; border: none; background: none;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+    }
+    .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" hidden>
+  <span class="nav-brand">Syro Library</span>
+  <a href="catalog.html"          class="nav-link">Catalog</a>
+  <a href="students.html"         class="nav-link">Students</a>
+  <a href="books.html"            class="nav-link">Manage Books</a>
+  <a href="donations-admin.html"  class="nav-link active">Donation Drive</a>
+  <a href="volunteers.html"       class="nav-link">Volunteers</a>
+  <div class="nav-divider"></div>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
+
+<div id="page-loading" class="page-loading">
+  <span class="spinner"></span>
+  <span>Loading…</span>
+</div>
+
+<main id="page-content" class="page-content" hidden>
+
+  <div class="page-header">
+    <h1 class="page-title">Book Donation Drive</h1>
+    <a href="donate.html" class="btn btn-ghost btn-sm">View public page</a>
+  </div>
+
+  <!-- ── Stats ────────────────────────────────────────────────────────────── -->
+  <div class="stat-row">
+    <div><div class="stat-value" id="stat-books">0</div>    <div class="stat-label">Books on list</div></div>
+    <div><div class="stat-value" id="stat-pledged">0</div>  <div class="stat-label">Copies pledged</div></div>
+    <div><div class="stat-value" id="stat-received">0</div> <div class="stat-label">Received</div></div>
+    <div><div class="stat-value" id="stat-value">$0</div>   <div class="stat-label">Value pledged</div></div>
+  </div>
+
+  <!-- ── Import ───────────────────────────────────────────────────────────── -->
+  <section class="panel">
+    <h2>Add books from a spreadsheet</h2>
+    <p class="form-hint" style="margin-bottom:1rem;">
+      Export the booklist sheet as CSV and drop it here. Columns are matched by their
+      header names — <code>Book Title</code>, <code>Author</code>, <code>Denomination</code>,
+      <code>Category by Age</code>, <code>Publisher</code>, <code>New/Used</code>,
+      <code>Unit Price</code>, <code>Qty</code>, <code>Link to Purchase</code>. Books already
+      on the list are updated rather than duplicated, and existing pledges are kept.
+    </p>
+
+    <div class="drop-zone" id="drop-zone">
+      <strong>Choose a CSV file</strong> or drag one here
+      <input type="file" id="csv-input" accept=".csv,text/csv" hidden />
+    </div>
+
+    <p class="form-hint mt-2">
+      Starting fresh? <a href="#" id="load-starter">Load the parish starter list</a>
+      (the original drive spreadsheet, bundled with the site).
+    </p>
+
+    <div id="import-preview" class="mt-4" hidden>
+      <p id="import-summary" style="font-size:0.875rem;"></p>
+      <div class="table-wrapper mt-2" style="max-height:260px; overflow:auto;">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Title</th><th>Author</th><th>Ages</th><th>Publisher</th><th>Cond.</th><th>Price</th><th>Qty</th></tr>
+          </thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button id="import-confirm" class="btn btn-primary">Import books</button>
+        <button id="import-cancel"  class="btn btn-ghost">Discard</button>
+      </div>
+    </div>
+
+    <p id="import-error" class="text-danger mt-2" hidden></p>
+  </section>
+
+  <!-- ── Tabs ─────────────────────────────────────────────────────────────── -->
+  <div class="tabs">
+    <button class="tab active" data-tab="pledges">Pledges</button>
+    <button class="tab" data-tab="books">Book list</button>
+  </div>
+
+  <!-- ── Pledges ──────────────────────────────────────────────────────────── -->
+  <section id="tab-pledges">
+    <div class="page-header" style="margin-bottom:0.75rem;">
+      <input type="search" id="pledge-search" class="search-input"
+             placeholder="Search pledges by book or donor…" autocomplete="off" />
+      <button id="export-btn" class="btn btn-ghost btn-sm">Export CSV</button>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Book</th><th>Donor</th><th>Contact</th><th>Qty</th>
+            <th>Pledged</th><th>Status</th><th class="td-actions"></th>
+          </tr>
+        </thead>
+        <tbody id="pledges-tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state hidden" id="pledges-empty">
+      <p class="empty-state-title">No pledges yet</p>
+      <p>Share the donation page with the parish to get started.</p>
+    </div>
+  </section>
+
+  <!-- ── Book list ────────────────────────────────────────────────────────── -->
+  <section id="tab-books" hidden>
+    <div class="search-bar">
+      <input type="search" id="book-search" class="search-input"
+             placeholder="Search the book list…" autocomplete="off" />
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Title</th><th>Author</th><th>Ages</th><th>Price</th><th>Claimed</th><th class="td-actions"></th></tr>
+        </thead>
+        <tbody id="books-tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state hidden" id="books-empty">
+      <p class="empty-state-title">No books on the list</p>
+      <p>Import a CSV above to get started.</p>
+    </div>
+  </section>
+
+</main>
+
+<script type="module">
+import { requireAuth, signOutUser }                        from './js/auth.js';
+import { subscribeToDonationBooks, subscribeToDonationClaims,
+         getDonationContacts, setClaimStatus, cancelClaim,
+         deleteDonationBook, parseCsv, normalizeDonationRows,
+         importDonationBooks, toCsv, downloadCsv }          from './js/donations.js';
+import { escHtml, showToast, formatDate }                   from './js/ui.js';
+
+const user = await requireAuth('admin');
+
+document.getElementById('nav').hidden = false;
+document.getElementById('nav-user').innerHTML =
+  `${escHtml(user.name || user.email)} <span class="badge badge-admin">admin</span>`;
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _books    = [];
+let _claims   = [];
+let _contacts = {};
+let _pending  = null;   // parsed books awaiting import confirmation
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+subscribeToDonationBooks((books) => {
+  _books = books;
+  renderStats();
+  renderBooks();
+  document.getElementById('page-loading').hidden = true;
+  document.getElementById('page-content').hidden = false;
+});
+
+subscribeToDonationClaims(async (claims) => {
+  _claims   = claims;
+  _contacts = await getDonationContacts().catch(() => ({}));
+  renderStats();
+  renderPledges();
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function renderStats() {
+  const pledged  = _claims.reduce((n, c) => n + (c.qty || 1), 0);
+  const received = _claims.filter(c => c.status === 'received').reduce((n, c) => n + (c.qty || 1), 0);
+  const value    = _claims.reduce((sum, c) => {
+    const book = _books.find(b => b.id === c.bookId);
+    return sum + (book?.unitPrice || 0) * (c.qty || 1);
+  }, 0);
+
+  document.getElementById('stat-books').textContent    = _books.length;
+  document.getElementById('stat-pledged').textContent  = pledged;
+  document.getElementById('stat-received').textContent = received;
+  document.getElementById('stat-value').textContent    = `$${value.toFixed(0)}`;
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelector('.tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+  document.getElementById('tab-pledges').hidden = tab.dataset.tab !== 'pledges';
+  document.getElementById('tab-books').hidden   = tab.dataset.tab !== 'books';
+});
+
+// ── Pledges table ─────────────────────────────────────────────────────────────
+document.getElementById('pledge-search').addEventListener('input', renderPledges);
+
+function pledgeRows() {
+  const term = document.getElementById('pledge-search').value.trim().toLowerCase();
+  return _claims
+    .map(c => ({ claim: c, contact: _contacts[c.id] || {} }))
+    .filter(({ claim, contact }) => !term ||
+      [claim.bookTitle, contact.name, contact.email, contact.phone]
+        .some(v => (v || '').toLowerCase().includes(term)))
+    .sort((a, b) => (b.claim.createdAt?.seconds || 0) - (a.claim.createdAt?.seconds || 0));
+}
+
+function renderPledges() {
+  const rows  = pledgeRows();
+  const tbody = document.getElementById('pledges-tbody');
+  const empty = document.getElementById('pledges-empty');
+
+  empty.classList.toggle('hidden', rows.length > 0);
+  tbody.innerHTML = rows.map(({ claim, contact }) => `
+    <tr>
+      <td style="font-weight:500">${escHtml(claim.bookTitle)}</td>
+      <td>
+        ${escHtml(contact.name || claim.displayName || '—')}
+        ${claim.anonymous ? '<span class="badge badge-volunteer" style="margin-left:.375rem">anonymous</span>' : ''}
+      </td>
+      <td style="color:var(--color-gray-500)">
+        ${escHtml(contact.email || '')}${contact.phone ? `<br />${escHtml(contact.phone)}` : ''}
+      </td>
+      <td>${claim.qty || 1}</td>
+      <td style="color:var(--color-gray-500)">${claim.createdAt ? formatDate(claim.createdAt) : '—'}</td>
+      <td>
+        <span class="badge ${claim.status === 'received' ? 'badge-available' : 'badge-due-soon'}">
+          ${claim.status === 'received' ? 'Received' : 'Pledged'}
+        </span>
+      </td>
+      <td class="td-actions">
+        <button class="btn btn-ghost btn-sm status-btn" data-id="${claim.id}"
+                data-status="${claim.status === 'received' ? 'pledged' : 'received'}">
+          ${claim.status === 'received' ? 'Undo' : 'Mark received'}
+        </button>
+        <button class="btn btn-danger btn-sm cancel-btn" data-id="${claim.id}"
+                style="margin-left:.25rem">Remove</button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('pledges-tbody').addEventListener('click', async (e) => {
+  const statusBtn = e.target.closest('.status-btn');
+  const cancelBtn = e.target.closest('.cancel-btn');
+
+  if (statusBtn) {
+    statusBtn.disabled = true;
+    try {
+      await setClaimStatus(statusBtn.dataset.id, statusBtn.dataset.status);
+    } catch (err) {
+      console.error(err);
+      showToast('Could not update the pledge.', 'error');
+      statusBtn.disabled = false;
+    }
+  }
+
+  if (cancelBtn) {
+    const claim = _claims.find(c => c.id === cancelBtn.dataset.id);
+    if (!claim || !confirm(`Remove the pledge for "${claim.bookTitle}"?\nThe book goes back on the list.`)) return;
+    cancelBtn.disabled = true;
+    try {
+      await cancelClaim(claim);
+      showToast('Pledge removed.');
+    } catch (err) {
+      console.error(err);
+      showToast('Could not remove the pledge.', 'error');
+      cancelBtn.disabled = false;
+    }
+  }
+});
+
+// ── Export ────────────────────────────────────────────────────────────────────
+document.getElementById('export-btn').addEventListener('click', () => {
+  const header = ['Book', 'Donor', 'Email', 'Phone', 'Qty', 'Unit Price', 'Pledged On', 'Status', 'Public name'];
+  const rows = pledgeRows().map(({ claim, contact }) => {
+    const book = _books.find(b => b.id === claim.bookId);
+    return [
+      claim.bookTitle,
+      contact.name || '',
+      contact.email || '',
+      contact.phone || '',
+      claim.qty || 1,
+      book?.unitPrice ?? '',
+      claim.createdAt ? formatDate(claim.createdAt) : '',
+      claim.status,
+      claim.anonymous ? 'Anonymous' : (claim.displayName || ''),
+    ];
+  });
+  downloadCsv('donation-pledges.csv', toCsv([header, ...rows]));
+});
+
+// ── Book list table ───────────────────────────────────────────────────────────
+document.getElementById('book-search').addEventListener('input', renderBooks);
+
+function renderBooks() {
+  const term  = document.getElementById('book-search').value.trim().toLowerCase();
+  const books = _books.filter(b => !term ||
+    [b.title, b.author, b.publisher].some(v => (v || '').toLowerCase().includes(term)));
+
+  const tbody = document.getElementById('books-tbody');
+  document.getElementById('books-empty').classList.toggle('hidden', books.length > 0);
+
+  tbody.innerHTML = books.map(b => `
+    <tr>
+      <td style="color:var(--color-gray-500)">${b.seq ?? ''}</td>
+      <td style="font-weight:500">${escHtml(b.title)}</td>
+      <td>${escHtml(b.author || '—')}</td>
+      <td>${escHtml(b.ageRange || '—')}</td>
+      <td>$${(b.unitPrice || 0).toFixed(2)}</td>
+      <td>${b.claimedCount || 0} / ${b.qty || 1}</td>
+      <td class="td-actions">
+        <button class="btn btn-danger btn-sm book-delete-btn" data-id="${b.id}">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('books-tbody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.book-delete-btn');
+  if (!btn) return;
+  const book = _books.find(b => b.id === btn.dataset.id);
+  if (!book || !confirm(`Remove "${book.title}" from the donation list?`)) return;
+
+  btn.disabled = true;
+  try {
+    await deleteDonationBook(book.id);
+    showToast('Book removed from the list.');
+  } catch (err) {
+    showToast(err.message, 'error');
+    btn.disabled = false;
+  }
+});
+
+// ── CSV import ────────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById('drop-zone');
+const csvInput  = document.getElementById('csv-input');
+const importErr = document.getElementById('import-error');
+
+dropZone.addEventListener('click', () => csvInput.click());
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files?.[0];
+  if (file) readFile(file);
+});
+csvInput.addEventListener('change', () => {
+  if (csvInput.files?.[0]) readFile(csvInput.files[0]);
+});
+
+document.getElementById('load-starter').addEventListener('click', async (e) => {
+  e.preventDefault();
+  importErr.hidden = true;
+  try {
+    const res = await fetch('data/donation-booklist.csv');
+    if (!res.ok) throw new Error('Starter list not found.');
+    stageBooks(await res.text());
+  } catch (err) {
+    console.error(err);
+    importErr.textContent = err.message || 'Could not load the starter list.';
+    importErr.hidden = false;
+  }
+});
+
+async function readFile(file) {
+  importErr.hidden = true;
+  try {
+    stageBooks(await file.text());
+  } catch (err) {
+    console.error(err);
+    importErr.textContent = err.message || 'Could not read that file.';
+    importErr.hidden = false;
+  }
+}
+
+function stageBooks(text) {
+  const { books, skipped } = normalizeDonationRows(parseCsv(text));
+  if (!books.length) throw new Error('No book rows found in that file.');
+
+  // Two rows in one file with the same title collapse into a single doc
+  const unique = [...new Map(books.map(b => [b.id, b])).values()];
+  _pending = unique;
+
+  const existingIds = new Set(_books.map(b => b.id));
+  const newCount    = unique.filter(b => !existingIds.has(b.id)).length;
+
+  document.getElementById('import-summary').innerHTML =
+    `<strong>${unique.length}</strong> book${unique.length === 1 ? '' : 's'} parsed — ` +
+    `${newCount} new, ${unique.length - newCount} already on the list` +
+    (skipped ? ` · ${skipped} row${skipped === 1 ? '' : 's'} skipped (no title)` : '') +
+    (unique.length > 200 ? ' · showing the first 200 below' : '');
+
+  document.getElementById('preview-tbody').innerHTML = unique.slice(0, 200).map(b => `
+    <tr>
+      <td style="color:var(--color-gray-500)">${b.seq}</td>
+      <td>${escHtml(b.title)}</td>
+      <td>${escHtml(b.author || '—')}</td>
+      <td>${escHtml(b.ageRange || '—')}</td>
+      <td>${escHtml(b.publisher || '—')}</td>
+      <td>${escHtml(b.condition)}</td>
+      <td>$${b.unitPrice.toFixed(2)}</td>
+      <td>${b.qty}</td>
+    </tr>`).join('');
+
+  document.getElementById('import-preview').hidden = false;
+}
+
+document.getElementById('import-cancel').addEventListener('click', () => {
+  _pending = null;
+  csvInput.value = '';
+  document.getElementById('import-preview').hidden = true;
+});
+
+document.getElementById('import-confirm').addEventListener('click', async () => {
+  if (!_pending) return;
+  const btn = document.getElementById('import-confirm');
+  btn.disabled = true;
+
+  try {
+    const { created, updated } = await importDonationBooks(_pending, (done, total) => {
+      btn.textContent = `Importing ${done}/${total}…`;
+    });
+    showToast(`${created} book${created === 1 ? '' : 's'} added, ${updated} updated.`, 'success');
+    _pending = null;
+    csvInput.value = '';
+    document.getElementById('import-preview').hidden = true;
+  } catch (err) {
+    console.error(err);
+    importErr.textContent = 'Import failed. Please try again.';
+    importErr.hidden = false;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Import books';
+  }
+});
+</script>
+
+</body>
+</html>

@@ -5,7 +5,7 @@
 import { db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs,
-  setDoc, deleteDoc, query, where,
+  setDoc, updateDoc, deleteDoc, query, where,
   serverTimestamp,
 } from 'firebase/firestore';
 
@@ -37,12 +37,18 @@ export async function getPendingInvitations() {
 export async function addVolunteerInvitation({ name, email, addedBy }) {
   const normalizedEmail = email.toLowerCase().trim();
 
-  // Reject if someone with this email already has an active account
+  // Someone who already signed in through the donation drive has a
+  // 'parishioner' account — promote it instead of inviting them again.
   const existingSnap = await getDocs(
     query(collection(db, 'users'), where('email', '==', normalizedEmail))
   );
   if (!existingSnap.empty) {
-    throw new Error('This email already has access.');
+    const existing = existingSnap.docs[0];
+    if (existing.data().role !== 'parishioner') {
+      throw new Error('This email already has access.');
+    }
+    await updateDoc(existing.ref, { role: 'volunteer', name: name.trim() });
+    return { promoted: true };
   }
 
   // Reject if an invitation for this email is already pending

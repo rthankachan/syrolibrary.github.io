@@ -43,6 +43,13 @@ service cloud.firestore {
         && request.auth.uid == userId
         && exists(/databases/$(database)/documents/invitations/$(request.auth.token.email.lower()));
 
+      // Anyone signing in without an invitation self-registers as a parishioner.
+      // The role is pinned here so it can never be escalated from the client.
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.role == 'parishioner'
+        && request.resource.data.email == request.auth.token.email.lower();
+
       // User can only update their own lastLoginAt; admin can update anything
       allow update: if isAuthenticated() && request.auth.uid == userId &&
         request.resource.data.diff(resource.data).affectedKeys()
@@ -79,6 +86,51 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'returnedAt']);
       allow delete: if isAdmin();
+    }
+
+    // ── /donationBooks/{bookId} ────────────────────────────────────────────
+    // The donation drive wishlist. Public so parishioners can browse before
+    // signing in; only admins add or edit entries (CSV import).
+    match /donationBooks/{bookId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
+      // A signed-in parishioner pledging or cancelling only moves the counter,
+      // and never past the number of copies the library asked for.
+      allow update: if isAuthenticated() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['claimedCount', 'updatedAt']) &&
+        request.resource.data.claimedCount >= 0 &&
+        request.resource.data.claimedCount <= resource.data.qty;
+    }
+
+    // ── /donationClaims/{claimId} ──────────────────────────────────────────
+    // Public pledge record. Carries displayName only — blank when the donor
+    // asked to stay anonymous — so no identity leaks through a public read.
+    match /donationClaims/{claimId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && request.resource.data.donorUid == request.auth.uid
+        && request.resource.data.status == 'pledged'
+        && request.resource.data.qty is int
+        && request.resource.data.qty > 0;
+      // Donors may withdraw; admins may also mark a book as received
+      allow delete: if isAdmin() ||
+        (isAuthenticated() && resource.data.donorUid == request.auth.uid);
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+    }
+
+    // ── /donationContacts/{claimId} ────────────────────────────────────────
+    // Donor name, email and phone. Readable only by the donor and admins,
+    // which is what lets a pledge be publicly anonymous but still traceable.
+    match /donationContacts/{claimId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.donorUid == request.auth.uid);
+      allow create: if isAuthenticated()
+        && request.resource.data.donorUid == request.auth.uid;
+      allow delete: if isAdmin() ||
+        (isAuthenticated() && resource.data.donorUid == request.auth.uid);
     }
   }
 }

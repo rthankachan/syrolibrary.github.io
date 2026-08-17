@@ -198,9 +198,14 @@
       St. Thomas Syro Malabar Church, Fremont
     </div>
   </div>
-  <a id="staff-btn" href="login.html" class="btn btn-primary btn-sm" style="font-size:0.8125rem;">
-    Staff login
-  </a>
+  <div style="display:flex; align-items:center; gap:0.5rem;">
+    <a href="donate.html" class="btn btn-ghost btn-sm" style="font-size:0.8125rem;">
+      Donate a book
+    </a>
+    <a id="staff-btn" href="login.html" class="btn btn-primary btn-sm" style="font-size:0.8125rem;">
+      Staff login
+    </a>
+  </div>
 </header>
 
 <!-- ── Staff nav (visible when logged in — identical structure to other pages) -->
@@ -209,6 +214,7 @@
   <a href="catalog.html"    class="nav-link active">Catalog</a>
   <a href="students.html"   class="nav-link admin-only" hidden>Students</a>
   <a href="books.html"      class="nav-link admin-only" hidden>Manage Books</a>
+  <a href="donations-admin.html" class="nav-link admin-only" hidden>Donation Drive</a>
   <a href="volunteers.html" class="nav-link admin-only" hidden>Volunteers</a>
   <div class="nav-divider"></div>
   <span class="nav-user" id="nav-user"></span>
@@ -351,7 +357,7 @@
 import { subscribeToBooks, filterBooks }                      from './js/books.js';
 import { escHtml, openModal, closeModal,
          initModalDismiss, showToast, formatDate }            from './js/ui.js';
-import { initAuth, signOutUser }                              from './js/auth.js';
+import { initAuth, signOutUser, STAFF_ROLES }                 from './js/auth.js';
 import { loadStudents, searchStudents }                       from './js/students.js';
 import { getActiveCheckoutsForBook, checkoutBook,
          checkinBook, getOverdueStatus }                      from './js/checkouts.js';
@@ -386,7 +392,10 @@ let _selectedStudent = null;
 let _typeaheadHits   = [];
 
 // ── Auth — non-blocking: public users see catalog, staff get extra UI ─────────
+// Parishioners signed in through the donation drive fall through to the public
+// view, since they have no library operations to perform here.
 initAuth({
+  requiredRole: STAFF_ROLES,
   onAuthorized: async (user) => {
     _staffUser = user;
     document.getElementById('catalog-header').hidden = true;

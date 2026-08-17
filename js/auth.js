@@ -25,15 +25,24 @@ export function getCurrentUser() {
   return _userData;
 }
 
+export const STAFF_ROLES = ['admin', 'volunteer'];
+
+export function isStaff(userData) {
+  return STAFF_ROLES.includes(userData?.role);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveUser
 // Called after Firebase Auth gives us a firebaseUser.
-// Returns a userData object if the user is authorised, null if not.
+// Returns a userData object for the signed-in user.
 //
 // First-login flow:
 //   Admin pre-creates /invitations/{email} with { name, role }.
 //   On first login this function reads the invitation, creates /users/{uid},
 //   and deletes the invitation. Subsequent logins just update lastLoginAt.
+//
+// Anyone without an invitation becomes a 'parishioner' — the self-serve role
+// used by the book donation drive. It grants no access to library operations.
 // ─────────────────────────────────────────────────────────────────────────────
 async function resolveUser(firebaseUser) {
   const userRef = doc(db, 'users', firebaseUser.uid);
@@ -65,8 +74,15 @@ async function resolveUser(firebaseUser) {
     return { uid: firebaseUser.uid, ...newUser };
   }
 
-  // No user doc and no invitation → not authorised
-  return null;
+  const parishioner = {
+    email,
+    name:        firebaseUser.displayName || email,
+    role:        'parishioner',
+    createdAt:   serverTimestamp(),
+    lastLoginAt: serverTimestamp(),
+  };
+  await setDoc(userRef, parishioner);
+  return { uid: firebaseUser.uid, ...parishioner };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,7 +113,8 @@ export async function signOutUser() {
 // Options:
 //   onAuthorized(userData)   — user is valid and has an allowed role
 //   onUnauthorized(reason)   — 'unauthenticated' | 'no-access' | 'wrong-role' | 'error'
-//   requiredRole             — 'admin' to restrict a page to admins only (default: any role)
+//   requiredRole             — a role or array of roles allowed on this page
+//                              (default: any role, including 'parishioner')
 //
 // Returns the Firebase unsubscribe function in case you need to stop listening.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,8 +137,13 @@ export function initAuth({ onAuthorized, onUnauthorized, requiredRole = null }) 
         return;
       }
 
-      if (requiredRole && userData.role !== requiredRole) {
-        onUnauthorized('wrong-role');
+      const allowedRoles = requiredRole
+        ? (Array.isArray(requiredRole) ? requiredRole : [requiredRole])
+        : null;
+
+      if (allowedRoles && !allowedRoles.includes(userData.role)) {
+        _userData = userData;
+        onUnauthorized('wrong-role', userData);
         return;
       }
 
@@ -146,17 +168,17 @@ export function initAuth({ onAuthorized, onUnauthorized, requiredRole = null }) 
 //   const user = await requireAuth();            // any logged-in volunteer/admin
 //   const user = await requireAuth('admin');     // admin-only page
 // ─────────────────────────────────────────────────────────────────────────────
-export function requireAuth(requiredRole = null) {
+export function requireAuth(requiredRole = STAFF_ROLES) {
   return new Promise((resolve) => {
     initAuth({
       requiredRole,
       onAuthorized: (userData) => resolve(userData),
-      onUnauthorized: (reason) => {
+      onUnauthorized: (reason, userData) => {
         if (reason === 'unauthenticated') {
           window.location.href = 'login.html';
         } else if (reason === 'wrong-role') {
-          // Volunteer trying to access admin page — send to dashboard
-          window.location.href = 'catalog.html';
+          // Volunteer on an admin page → dashboard; parishioner → donation page
+          window.location.href = isStaff(userData) ? 'catalog.html' : 'donate.html';
         } else {
           // no-access or error — go to login with message
           window.location.href = 'login.html?denied=1';

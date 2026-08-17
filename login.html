@@ -63,12 +63,15 @@
       <a href="catalog.html" style="font-size:0.8125rem; color:var(--color-gray-400);">
         &larr; Back to catalog
       </a>
+      <p style="margin-top:0.5rem; font-size:0.8125rem; color:var(--color-gray-500);">
+        Donating a book? <a href="donate.html">Go to the donation drive</a>
+      </p>
     </div>
 
   </div>
 
   <script type="module">
-    import { initAuth, signInWithGoogle } from './js/auth.js';
+    import { initAuth, signInWithGoogle, isStaff } from './js/auth.js';
 
     const loadingEl  = document.getElementById('loading');
     const formEl     = document.getElementById('login-form');
@@ -77,8 +80,9 @@
     const signinBtn  = document.getElementById('signin-btn');
 
     initAuth({
-      onAuthorized: () => {
-        window.location.replace('catalog.html');
+      onAuthorized: (userData) => {
+        // Parishioners have no staff pages to land on — send them to the drive
+        window.location.replace(isStaff(userData) ? 'catalog.html' : 'donate.html');
       },
       onUnauthorized: (reason) => {
         loadingEl.hidden = true;

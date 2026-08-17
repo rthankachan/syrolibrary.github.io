@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book Donation Drive — Syro Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+
+  <style>
+    /* ── Public header ────────────────────────────────────────────────────── */
+    .catalog-header {
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-gray-200);
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .catalog-brand { font-size: 1.0625rem; font-weight: 700; color: var(--color-gray-900); }
+    .catalog-brand span { color: var(--color-primary); }
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .header-user {
+      font-size: 0.8125rem; color: var(--color-gray-500);
+      max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ── Hero ─────────────────────────────────────────────────────────────── */
+    .drive-hero {
+      background: linear-gradient(135deg, var(--color-primary) 0%, #123a9e 100%);
+      color: #fff;
+      border-radius: var(--radius-lg);
+      padding: 1.75rem 1.75rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .drive-hero h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .drive-hero p  { font-size: 0.9375rem; opacity: 0.92; max-width: 60ch; }
+
+    .drive-stats {
+      display: flex; flex-wrap: wrap; gap: 2rem;
+      margin-top: 1.5rem; padding-top: 1.25rem;
+      border-top: 1px solid rgba(255,255,255,.22);
+    }
+    .drive-stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+    .drive-stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; opacity: .8; }
+
+    .progress-track {
+      margin-top: 1.25rem; height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,.25); overflow: hidden;
+    }
+    .progress-fill { height: 100%; background: #fff; border-radius: 999px; transition: width .4s ease; }
+
+    /* ── Filters ──────────────────────────────────────────────────────────── */
+    .filter-row { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 0.75rem; }
+    .filter-pill {
+      padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.8125rem;
+      cursor: pointer; border: 1px solid var(--color-gray-300);
+      background: var(--color-white); color: var(--color-gray-500);
+      transition: background .1s, color .1s, border-color .1s; user-select: none;
+    }
+    .filter-pill:hover  { border-color: var(--color-primary); color: var(--color-primary); }
+    .filter-pill.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+
+    /* ── Wishlist cards ───────────────────────────────────────────────────── */
+    .donate-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .donate-card {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      display: flex; flex-direction: column; gap: 0.5rem;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .donate-card:hover { box-shadow: var(--shadow-md); border-color: var(--color-gray-300); }
+    .donate-card.is-claimed { background: var(--color-gray-50); }
+
+    .donate-title  { font-weight: 600; font-size: 0.9375rem; line-height: 1.4; }
+    .donate-author { font-size: 0.8125rem; color: var(--color-gray-500); }
+    .donate-meta   { font-size: 0.75rem; color: var(--color-gray-500); line-height: 1.6; }
+    .donate-tags   { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .donate-tag {
+      font-size: 0.6875rem; padding: 0.125rem 0.5rem; border-radius: 999px;
+      background: var(--color-gray-100); color: var(--color-gray-700);
+    }
+    .donate-price { font-size: 1.0625rem; font-weight: 700; }
+    .donate-foot {
+      margin-top: auto; padding-top: 0.625rem; border-top: 1px solid var(--color-gray-100);
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    }
+    .donor-line { font-size: 0.75rem; color: var(--color-success); font-weight: 600; }
+
+    /* ── My pledges ───────────────────────────────────────────────────────── */
+    .pledge-panel {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .pledge-panel h2 { font-size: 0.9375rem; margin-bottom: 0.75rem; }
+    .pledge-item {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; padding: 0.5rem 0; font-size: 0.875rem;
+      border-top: 1px solid var(--color-gray-100);
+    }
+    .pledge-item:first-of-type { border-top: none; }
+
+    .checkbox-row { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.875rem; }
+    .checkbox-row input { margin-top: 0.2rem; }
+
+    @media (max-width: 640px) {
+      .donate-grid { grid-template-columns: 1fr; }
+      .drive-hero  { padding: 1.25rem; }
+      .drive-stats { gap: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Public header ──────────────────────────────────────────────────────── -->
+<header class="catalog-header">
+  <div>
+    <div class="catalog-brand">Syro <span>Library</span></div>
+    <div style="font-size:0.75rem; color:var(--color-gray-500); margin-top:0.1rem;">
+      St. Thomas Syro Malabar Church, Fremont
+    </div>
+  </div>
+  <div class="header-actions">
+    <a href="catalog.html" class="btn btn-ghost btn-sm">Catalog</a>
+    <a id="admin-link" href="donations-admin.html" class="btn btn-ghost btn-sm" hidden>Manage drive</a>
+    <span class="header-user" id="header-user" hidden></span>
+    <button id="signin-btn"  class="btn btn-primary btn-sm" type="button">Sign in</button>
+    <button id="signout-btn" class="btn btn-ghost btn-sm" type="button" hidden>Sign out</button>
+  </div>
+</header>
+
+<div class="page-content">
+
+  <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+  <section class="drive-hero">
+    <h1>Book Donation Drive</h1>
+    <p>
+      Help us build the parish children's library. Pick a book below, buy it using the
+      purchase link, and drop it off at <strong>Room #215</strong> on a Sunday. Claiming
+      a book here keeps two families from buying the same one.
+    </p>
+    <div class="drive-stats">
+      <div>
+        <div class="drive-stat-value" id="stat-total">—</div>
+        <div class="drive-stat-label">Books on the list</div>
+      </div>
+      <div>
+        <div class="drive-stat-value" id="stat-claimed">—</div>
+        <div class="drive-stat-label">Already claimed</div>
+      </div>
+      <div>
+        <div class="drive-stat-value" id="stat-remaining">—</div>
+        <div class="drive-stat-label">Still needed</div>
+      </div>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </section>
+
+  <!-- ── My pledges ───────────────────────────────────────────────────────── -->
+  <section class="pledge-panel" id="pledge-panel" hidden>
+    <h2>My pledges</h2>
+    <div id="pledge-list"></div>
+  </section>
+
+  <!-- ── Filters ──────────────────────────────────────────────────────────── -->
+  <div class="search-bar" style="margin-bottom:0.75rem;">
+    <input type="search" id="search-input" class="search-input"
+           placeholder="Search by title, author, or publisher…" autocomplete="off" />
+  </div>
+  <div class="filter-row" id="status-filter">
+    <button class="filter-pill active" data-status="available">Still needed</button>
+    <button class="filter-pill" data-status="claimed">Claimed</button>
+    <button class="filter-pill" data-status="all">All books</button>
+  </div>
+  <div class="filter-row" id="age-filter"></div>
+
+  <!-- ── Results ──────────────────────────────────────────────────────────── -->
+  <div id="loading" class="page-loading">
+    <span class="spinner"></span>
+    <span>Loading the book list…</span>
+  </div>
+
+  <div class="empty-state hidden" id="load-error">
+    <p class="empty-state-title">The book list could not be loaded</p>
+    <p>Please refresh the page, or let the library know if it keeps happening.</p>
+  </div>
+
+  <div class="results-bar" id="count" style="font-size:0.875rem; color:var(--color-gray-500); margin:1rem 0 0.75rem;" hidden></div>
+
+  <div id="book-container" class="donate-grid" hidden></div>
+
+  <div class="empty-state hidden" id="empty">
+    <p class="empty-state-title">No books match</p>
+    <p>Try a different search or filter.</p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Pledge Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="pledge-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Donate this book</h2>
+      <button class="modal-close" id="pm-close" aria-label="Close">&#x2715;</button>
+    </div>
+
+    <div class="modal-body">
+      <p id="pm-book" style="font-weight:600; margin-bottom:0.25rem;"></p>
+      <p id="pm-book-meta" class="text-muted" style="margin-bottom:1.25rem;"></p>
+
+      <div class="form-group">
+        <label class="form-label" for="pm-name">Your name <span style="color:var(--color-danger)">*</span></label>
+        <input id="pm-name" class="form-input" type="text" autocomplete="name" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pm-phone">Phone <span class="text-muted">(optional)</span></label>
+        <input id="pm-phone" class="form-input" type="tel" placeholder="So the library can reach you" autocomplete="tel" />
+      </div>
+
+      <div class="form-group" id="pm-qty-group" hidden>
+        <label class="form-label" for="pm-qty">How many copies?</label>
+        <input id="pm-qty" class="form-input" type="number" min="1" value="1" />
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-row">
+          <input type="checkbox" id="pm-anonymous" />
+          <span>
+            Show my pledge as <strong>Anonymous</strong> on this page.
+            <span class="form-hint" style="display:block; margin-top:0.125rem;">
+              Library admins can still see your name so they know who dropped the book off.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <p id="pm-error" class="text-danger mt-2" hidden></p>
+    </div>
+
+    <div class="modal-footer">
+      <button id="pm-cancel"  class="btn btn-ghost">Cancel</button>
+      <button id="pm-confirm" class="btn btn-primary">Confirm pledge</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Sign-in Modal
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="signin-modal" class="modal-overlay" hidden>
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Sign in to claim a book</h2>
+      <button class="modal-close" id="sm-close" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="modal-body text-center">
+      <p class="text-muted" style="margin-bottom:1.25rem;">
+        Sign in with your Google account so we can track who is bringing which book.
+        Any parishioner can sign in — no invitation needed.
+      </p>
+      <button id="sm-google" class="btn btn-google" type="button">Continue with Google</button>
+      <p id="sm-error" class="text-danger mt-4" hidden></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Page Script
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { initAuth, signInWithGoogle, signOutUser }        from './js/auth.js';
+import { subscribeToDonationBooks, subscribeToDonationClaims,
+         claimBook, cancelClaim }                          from './js/donations.js';
+import { escHtml, showToast, openModal, closeModal,
+         initModalDismiss }                                from './js/ui.js';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _books        = [];
+let _claims       = [];
+let _user         = null;
+let _statusFilter = 'available';
+let _ageFilter    = null;
+let _pendingBook  = null;   // book awaiting sign-in before its pledge modal opens
+let _loadedBooks  = false;
+
+// ── Auth (non-blocking — anyone may browse the list) ──────────────────────────
+initAuth({
+  onAuthorized: (user) => {
+    _user = user;
+    document.getElementById('signin-btn').hidden   = true;
+    document.getElementById('signout-btn').hidden  = false;
+    const userEl = document.getElementById('header-user');
+    userEl.textContent = user.name || user.email;
+    userEl.hidden = false;
+    document.getElementById('admin-link').hidden = user.role !== 'admin';
+
+    closeModal(document.getElementById('signin-modal'));
+    render();
+    if (_pendingBook) {
+      const book = _pendingBook;
+      _pendingBook = null;
+      openPledgeModal(book);
+    }
+  },
+  onUnauthorized: () => {
+    _user = null;
+    document.getElementById('signin-btn').hidden  = false;
+    document.getElementById('signout-btn').hidden = true;
+    document.getElementById('header-user').hidden = true;
+    document.getElementById('admin-link').hidden  = true;
+    render();
+  },
+});
+
+document.getElementById('signin-btn').addEventListener('click', () => {
+  openModal(document.getElementById('signin-modal'));
+});
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const AGE_BANDS = [
+  { key: '0-5',   label: 'Ages 0–5',  min: 0,  max: 5  },
+  { key: '6-9',   label: 'Ages 6–9',  min: 6,  max: 9  },
+  { key: '10-13', label: 'Ages 10–13', min: 10, max: 13 },
+  { key: '14+',   label: 'Ages 14+',  min: 14, max: 200 },
+];
+
+function bandFor(book) {
+  const first = parseInt(String(book.ageRange || '').match(/\d+/)?.[0] ?? '', 10);
+  if (!Number.isFinite(first)) return null;
+  return AGE_BANDS.find(b => first >= b.min && first <= b.max)?.key ?? null;
+}
+
+function claimsFor(bookId) {
+  return _claims.filter(c => c.bookId === bookId);
+}
+
+function remainingFor(book) {
+  const pledged = claimsFor(book.id).reduce((n, c) => n + (c.qty || 1), 0);
+  return Math.max(0, (book.qty || 1) - pledged);
+}
+
+function donorNames(bookId) {
+  return claimsFor(bookId).map(c => c.displayName?.trim() || 'Anonymous');
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', render);
+
+document.getElementById('status-filter').addEventListener('click', (e) => {
+  const pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  _statusFilter = pill.dataset.status;
+  document.querySelectorAll('#status-filter .filter-pill')
+    .forEach(p => p.classList.toggle('active', p === pill));
+  render();
+});
+
+function renderAgeFilter() {
+  const present = AGE_BANDS.filter(b => _books.some(bk => bandFor(bk) === b.key));
+  const bar = document.getElementById('age-filter');
+  if (!present.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.innerHTML = [{ key: '', label: 'All ages' }, ...present].map(b => `
+    <button class="filter-pill${(b.key || null) === _ageFilter ? ' active' : ''}"
+            data-band="${escHtml(b.key)}">${escHtml(b.label)}</button>`).join('');
+}
+
+document.getElementById('age-filter').addEventListener('click', (e) => {
+  const pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  _ageFilter = pill.dataset.band || null;
+  renderAgeFilter();
+  render();
+});
+
+function getFiltered() {
+  const term = document.getElementById('search-input').value.trim().toLowerCase();
+  return _books.filter((b) => {
+    const remaining = remainingFor(b);
+    if (_statusFilter === 'available' && remaining === 0) return false;
+    if (_statusFilter === 'claimed'   && remaining > 0)   return false;
+    if (_ageFilter && bandFor(b) !== _ageFilter) return false;
+    if (term && ![b.title, b.author, b.publisher].some(v => (v || '').toLowerCase().includes(term))) return false;
+    return true;
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  if (!_loadedBooks) return;
+
+  document.getElementById('loading').hidden = true;
+
+  renderStats();
+  renderPledgePanel();
+
+  const books     = getFiltered();
+  const container = document.getElementById('book-container');
+  const empty     = document.getElementById('empty');
+  const count     = document.getElementById('count');
+
+  count.hidden = false;
+  count.textContent = `${books.length} book${books.length === 1 ? '' : 's'}`;
+
+  if (!books.length) {
+    container.hidden = true;
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  container.hidden = false;
+  container.innerHTML = books.map(renderCard).join('');
+}
+
+function renderStats() {
+  const total     = _books.reduce((n, b) => n + (b.qty || 1), 0);
+  const remaining = _books.reduce((n, b) => n + remainingFor(b), 0);
+  const claimed   = total - remaining;
+
+  document.getElementById('stat-total').textContent     = total;
+  document.getElementById('stat-claimed').textContent   = claimed;
+  document.getElementById('stat-remaining').textContent = remaining;
+  document.getElementById('progress-fill').style.width  =
+    total ? `${Math.round((claimed / total) * 100)}%` : '0%';
+}
+
+function renderCard(book) {
+  const remaining = remainingFor(book);
+  const names     = donorNames(book.id);
+  const mine      = _user && claimsFor(book.id).some(c => c.donorUid === _user.uid);
+
+  const tags = [
+    book.ageRange   && `Ages ${escHtml(book.ageRange)}`,
+    book.condition  && escHtml(book.condition),
+    book.denomination && escHtml(book.denomination.split('.')[0]),
+  ].filter(Boolean).map(t => `<span class="donate-tag">${t}</span>`).join('');
+
+  const action = remaining > 0
+    ? `<button class="btn btn-primary btn-sm pledge-btn" data-id="${book.id}">
+         ${mine ? 'Donate another' : "I'll donate this"}
+       </button>`
+    : `<span class="badge badge-checked-out">Fully claimed</span>`;
+
+  const donors = names.length
+    ? `<div class="donor-line">Claimed by ${escHtml(names.join(', '))}</div>`
+    : '';
+
+  return `
+    <article class="donate-card${remaining === 0 ? ' is-claimed' : ''}">
+      <div class="donate-title">${escHtml(book.title)}</div>
+      ${book.author ? `<div class="donate-author">${escHtml(book.author)}</div>` : ''}
+      <div class="donate-tags">${tags}</div>
+      <div class="donate-meta">
+        ${book.publisher ? escHtml(book.publisher) + '<br />' : ''}
+        ${book.qty > 1 ? `${remaining} of ${book.qty} copies still needed` : ''}
+      </div>
+      ${donors}
+      <div class="donate-foot">
+        <div>
+          <div class="donate-price">${book.unitPrice
+            ? `$${book.unitPrice.toFixed(2)}`
+            : '<span class="text-muted" style="font-weight:500">Price varies</span>'}</div>
+          ${book.purchaseUrl
+            ? `<a href="${escHtml(book.purchaseUrl)}" target="_blank" rel="noopener"
+                  style="font-size:0.75rem;">Where to buy →</a>`
+            : ''}
+        </div>
+        ${action}
+      </div>
+    </article>`;
+}
+
+function renderPledgePanel() {
+  const panel = document.getElementById('pledge-panel');
+  if (!_user) { panel.hidden = true; return; }
+
+  const mine = _claims
+    .filter(c => c.donorUid === _user.uid)
+    .sort((a, b) => (a.bookTitle || '').localeCompare(b.bookTitle || ''));
+
+  if (!mine.length) { panel.hidden = true; return; }
+
+  panel.hidden = false;
+  document.getElementById('pledge-list').innerHTML = mine.map(c => `
+    <div class="pledge-item">
+      <div>
+        <div style="font-weight:500">${escHtml(c.bookTitle)}</div>
+        <div class="text-muted" style="font-size:0.75rem;">
+          ${c.qty > 1 ? `${c.qty} copies · ` : ''}
+          ${c.status === 'received' ? 'Received — thank you!' : 'Pledged'}
+          ${c.anonymous ? ' · shown as Anonymous' : ''}
+        </div>
+      </div>
+      ${c.status === 'received'
+        ? '<span class="badge badge-available">Received</span>'
+        : `<button class="btn btn-ghost btn-sm cancel-pledge-btn" data-id="${c.id}">Cancel</button>`}
+    </div>`).join('');
+}
+
+// ── Pledge actions ────────────────────────────────────────────────────────────
+document.getElementById('book-container').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pledge-btn');
+  if (!btn) return;
+  const book = _books.find(b => b.id === btn.dataset.id);
+  if (!book) return;
+
+  if (!_user) {
+    _pendingBook = book;
+    openModal(document.getElementById('signin-modal'));
+    return;
+  }
+  openPledgeModal(book);
+});
+
+document.getElementById('pledge-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.cancel-pledge-btn');
+  if (!btn) return;
+  const claim = _claims.find(c => c.id === btn.dataset.id);
+  if (!claim || !confirm(`Cancel your pledge for "${claim.bookTitle}"?`)) return;
+
+  btn.disabled = true;
+  try {
+    await cancelClaim(claim);
+    showToast('Pledge cancelled.');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not cancel the pledge. Please try again.', 'error');
+    btn.disabled = false;
+  }
+});
+
+// ── Pledge modal ──────────────────────────────────────────────────────────────
+const pledgeModal = document.getElementById('pledge-modal');
+initModalDismiss(pledgeModal);
+document.getElementById('pm-close').addEventListener('click',  () => closeModal(pledgeModal));
+document.getElementById('pm-cancel').addEventListener('click', () => closeModal(pledgeModal));
+
+let _pledgingBook = null;
+
+function openPledgeModal(book) {
+  _pledgingBook = book;
+  const remaining = remainingFor(book);
+
+  document.getElementById('pm-book').textContent = book.title;
+  document.getElementById('pm-book-meta').textContent =
+    [book.author, book.publisher, book.condition, book.unitPrice ? `$${book.unitPrice.toFixed(2)}` : '']
+      .filter(Boolean).join(' · ');
+
+  document.getElementById('pm-name').value      = _user?.name || '';
+  document.getElementById('pm-phone').value     = '';
+  document.getElementById('pm-anonymous').checked = false;
+  document.getElementById('pm-error').hidden    = true;
+
+  const qtyGroup = document.getElementById('pm-qty-group');
+  const qtyInput = document.getElementById('pm-qty');
+  qtyGroup.hidden = remaining <= 1;
+  qtyInput.max    = remaining;
+  qtyInput.value  = 1;
+
+  const confirmBtn = document.getElementById('pm-confirm');
+  confirmBtn.disabled    = false;
+  confirmBtn.textContent = 'Confirm pledge';
+
+  openModal(pledgeModal);
+}
+
+document.getElementById('pm-confirm').addEventListener('click', async () => {
+  const errorEl = document.getElementById('pm-error');
+  const btn     = document.getElementById('pm-confirm');
+  errorEl.hidden = true;
+
+  const donorName = document.getElementById('pm-name').value.trim();
+  const qty       = parseInt(document.getElementById('pm-qty').value, 10) || 1;
+
+  if (!donorName) {
+    errorEl.textContent = 'Please enter your name.';
+    errorEl.hidden = false;
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    await claimBook({
+      book:       _pledgingBook,
+      user:       _user,
+      donorName,
+      donorEmail: _user.email,
+      donorPhone: document.getElementById('pm-phone').value,
+      anonymous:  document.getElementById('pm-anonymous').checked,
+      qty,
+    });
+    closeModal(pledgeModal);
+    showToast(`Thank you! "${_pledgingBook.title}" is reserved for you.`, 'success');
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = err.message || 'Could not save the pledge. Please try again.';
+    errorEl.hidden = false;
+    btn.disabled    = false;
+    btn.textContent = 'Confirm pledge';
+  }
+});
+
+// ── Sign-in modal ─────────────────────────────────────────────────────────────
+const signinModal = document.getElementById('signin-modal');
+initModalDismiss(signinModal);
+document.getElementById('sm-close').addEventListener('click', () => {
+  _pendingBook = null;
+  closeModal(signinModal);
+});
+
+document.getElementById('sm-google').addEventListener('click', async () => {
+  const btn     = document.getElementById('sm-google');
+  const errorEl = document.getElementById('sm-error');
+  errorEl.hidden = true;
+  btn.disabled   = true;
+
+  try {
+    await signInWithGoogle();   // initAuth's listener takes over from here
+  } catch (err) {
+    if (err.code !== 'auth/popup-closed-by-user') {
+      console.error(err);
+      errorEl.textContent = 'Sign-in failed. Please try again.';
+      errorEl.hidden = false;
+    }
+    btn.disabled = false;
+  }
+});
+
+// ── Data — subscribed last so every helper above is initialised first ─────────
+subscribeToDonationBooks((books) => {
+  _books       = books;
+  _loadedBooks = true;
+  renderAgeFilter();
+  render();
+}, showLoadError);
+
+subscribeToDonationClaims((claims) => {
+  _claims = claims;
+  render();
+}, showLoadError);
+
+function showLoadError(err) {
+  console.error(err);
+  document.getElementById('loading').hidden = true;
+  document.getElementById('load-error').classList.remove('hidden');
+}
+</script>
+
+</body>
+</html>
