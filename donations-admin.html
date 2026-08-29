@@ -71,14 +71,15 @@
     <img class="brand-icon" src="/icons/church-logo.png" alt="" aria-hidden="true" />
     St. Thomas Library
   </span>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
+<nav class="nav-sub" id="nav-sub" hidden>
   <a href="catalog.html"          class="nav-link">Catalog</a>
   <a href="students.html"         class="nav-link admin-only" hidden>Students</a>
   <a href="books.html"            class="nav-link admin-only" hidden>Manage Books</a>
   <a href="donations-admin.html"  class="nav-link active">Donation Drive</a>
   <a href="volunteers.html"       class="nav-link admin-only" hidden>Volunteers</a>
-  <div class="nav-divider"></div>
-  <span class="nav-user" id="nav-user"></span>
-  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
 </nav>
 
 <div id="page-loading" class="page-loading">
@@ -273,8 +274,9 @@ import { escHtml, showToast, formatDate, openModal, closeModal,
 const user = await requireAuth();
 
 document.getElementById('nav').hidden = false;
+document.getElementById('nav-sub').hidden = false;
 document.getElementById('nav-user').innerHTML =
-  `${escHtml(user.name || user.email)} <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
+  `<span class="nav-user-name">${escHtml(user.name || user.email)}</span><span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
 if (user.role === 'admin') {
   document.querySelectorAll('.admin-only').forEach(el => el.hidden = false);
 }

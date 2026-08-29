@@ -1,4 +1,4 @@
-const CACHE = 'st-thomas-library-v2';
+const CACHE = 'st-thomas-library-v3';
 
 const PRECACHE = [
   '/',
@@ -31,7 +31,9 @@ const PRECACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
+      .then((cache) => cache.addAll(
+        PRECACHE.map((url) => new Request(url, { cache: 'reload' })),
+      ))
       .then(() => self.skipWaiting()),
   );
 });
