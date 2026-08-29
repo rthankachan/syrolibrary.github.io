@@ -122,9 +122,11 @@
     <p class="text-muted" id="due-soon-empty" hidden>Nothing due in the next 7 days.</p>
   </section>
 
-  <!-- ── By student ─────────────────────────────────────────────────────── -->
+  <!-- ── Needs follow-up: overdue or over the 2-book limit ──────────────── -->
   <section class="section">
-    <h2>By student</h2>
+    <h2>Needs follow-up
+      <span style="text-transform:none; font-weight:400; color:var(--color-gray-400)">— overdue or over the 2-book limit</span>
+    </h2>
     <div id="by-student"></div>
   </section>
 
@@ -323,25 +325,40 @@ function renderByStudent(rows) {
     if (!groups.has(co.studentId)) groups.set(co.studentId, []);
     groups.get(co.studentId).push(co);
   }
+
+  // Exceptions only: a student is shown if they have an overdue book or
+  // more than 2 books out. The full per-student list lives on Students → History.
   const list = [...groups.values()]
-    .map(items => ({ items, name: items[0].studentName, grade: items[0].studentGrade }))
-    .sort((a, b) => b.items.length - a.items.length || (a.name || '').localeCompare(b.name || ''));
+    .map(items => ({
+      items,
+      overdue:   items.filter(co => daysUntil(co.dueDate) < 0).length,
+      overLimit: items.length > 2,
+      name:  items[0].studentName,
+      grade: items[0].studentGrade,
+    }))
+    .filter(g => g.overdue > 0 || g.overLimit)
+    .sort((a, b) =>
+      b.overdue - a.overdue ||
+      (b.overLimit - a.overLimit) ||
+      b.items.length - a.items.length ||
+      (a.name || '').localeCompare(b.name || ''));
 
   const el = document.getElementById('by-student');
   if (!list.length) {
-    el.innerHTML = '<p class="text-muted">No active checkouts.</p>';
+    el.innerHTML = '<p class="text-muted">No students are overdue or over the 2-book limit.</p>';
     return;
   }
   el.innerHTML = list.map(g => {
-    const over = g.items.length > 2;
+    const overdueFlag = g.overdue > 0
+      ? `<span class="badge badge-overdue" style="margin-left:.5rem">${g.overdue} overdue</span>` : '';
+    const limitFlag = g.overLimit
+      ? `<span class="badge badge-due-soon" style="margin-left:.375rem">${g.items.length} books — over limit</span>` : '';
     return `
       <div class="student-group">
         <div class="student-group-head">
           <span style="font-weight:600">${escHtml(g.name || '—')}</span>
           <span style="color:var(--color-gray-500); font-size:.8125rem"> ${escHtml(g.grade || '')}</span>
-          <span class="badge ${over ? 'badge-overdue' : 'badge-checked-out'}" style="margin-left:.5rem">
-            ${g.items.length} book${g.items.length > 1 ? 's' : ''}${over ? ' — over limit' : ''}
-          </span>
+          ${overdueFlag}${limitFlag}
         </div>
         <ul class="student-group-list">
           ${g.items.map(co => {
