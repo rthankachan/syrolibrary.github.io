@@ -1,1 +1,5 @@
 .DS_Store
+
+# Local-only notes and internal docs — never deploy (repo root is public GitHub Pages)
+LEARNING.md
+docs/
