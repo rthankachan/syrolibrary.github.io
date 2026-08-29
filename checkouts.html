@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#1a56db" />
+  <meta name="description" content="St. Thomas Syro Malabar Church library catalog and book donation drive." />
+  <link rel="icon" href="/icons/church-logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="St. Thomas Library" />
+  <title>Circulation — St. Thomas Library</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app":       "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth":      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+  </script>
+
+  <style>
+    /* Page-specific styles live here (not in the precached css/*.css) */
+    .stat-row { display: flex; flex-wrap: wrap; gap: 2rem; margin-bottom: 1.75rem; }
+    .stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+    .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--color-gray-500); }
+
+    .section { margin-bottom: 2rem; }
+    .section > h2 {
+      font-size: 0.875rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--color-gray-500); margin-bottom: 0.75rem;
+    }
+    .section-actions { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
+
+    th.cb-col, td.cb-col { width: 1px; white-space: nowrap; }
+
+    .student-group {
+      border: 1px solid var(--color-gray-200); border-radius: var(--radius-md);
+      padding: 0.75rem 1rem; margin-bottom: 0.625rem; background: var(--color-white);
+    }
+    .student-group-head { margin-bottom: 0.375rem; }
+    .student-group-list { list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
+    .student-group-list li {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; font-size: 0.875rem;
+    }
+
+    .plain-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+    .plain-list li { font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" hidden>
+  <span class="nav-brand brand-mark">
+    <img class="brand-icon" src="/icons/church-logo.png" alt="" aria-hidden="true" />
+    St. Thomas Library
+  </span>
+  <span class="nav-user" id="nav-user"></span>
+  <button id="signout-btn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+</nav>
+<nav class="nav-sub" id="nav-sub" hidden>
+  <a href="catalog.html"    class="nav-link">Catalog</a>
+  <a href="checkouts.html"  class="nav-link active">Circulation</a>
+  <a href="students.html"   class="nav-link">Students</a>
+  <a href="books.html"      class="nav-link">Manage Books</a>
+  <a href="donations-admin.html" class="nav-link">Donation Drive</a>
+  <a href="volunteers.html" class="nav-link">Volunteers</a>
+</nav>
+
+<!-- ── Page loading ───────────────────────────────────────────────────────── -->
+<div id="page-loading" class="page-loading">
+  <span class="spinner"></span>
+  <span>Loading…</span>
+</div>
+
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<main id="page-content" class="page-content" hidden>
+
+  <div class="page-header">
+    <h1 class="page-title">Circulation</h1>
+  </div>
+
+  <div class="stat-row" id="stats"></div>
+
+  <div class="search-bar">
+    <input type="search" id="search-input" class="search-input"
+           placeholder="Search by student, title, or grade…" autocomplete="off" />
+  </div>
+
+  <!-- ── Due soon / overdue ─────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>Due soon &amp; overdue</h2>
+    <div class="section-actions" id="due-soon-actions" hidden>
+      <button id="draft-bulk-btn" class="btn btn-ghost btn-sm" type="button" disabled>
+        Draft email to selected parents
+      </button>
+    </div>
+    <div class="table-wrapper" id="due-soon-wrap" hidden>
+      <table>
+        <thead>
+          <tr>
+            <th class="cb-col"><input type="checkbox" id="select-all" title="Select all with email" /></th>
+            <th>Student</th>
+            <th>Grade</th>
+            <th>Title</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th class="td-actions"></th>
+          </tr>
+        </thead>
+        <tbody id="due-soon-tbody"></tbody>
+      </table>
+    </div>
+    <p class="text-muted" id="due-soon-empty" hidden>Nothing due in the next 7 days.</p>
+  </section>
+
+  <!-- ── By student ─────────────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>By student</h2>
+    <div id="by-student"></div>
+  </section>
+
+  <!-- ── Next available ─────────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>Next available</h2>
+    <div id="next-available"></div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Page Script
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { requireAuth, signOutUser }             from './js/auth.js';
+import { loadStudents }                         from './js/students.js';
+import { getOverdueStatus, checkinBook }        from './js/checkouts.js';
+import { subscribeToBooks }                     from './js/books.js';
+import { showToast, escHtml, formatDate }       from './js/ui.js';
+import { db }                                   from './js/firebase-config.js';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+
+// ── Auth guard (staff: admin or volunteer) ───────────────────────────────────
+const user = await requireAuth();
+
+document.getElementById('nav').hidden     = false;
+document.getElementById('nav-sub').hidden = false;
+document.getElementById('nav-user').innerHTML =
+  `<span class="nav-user-name">${escHtml(user.name || user.email)}</span><span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-volunteer'}">${user.role}</span>`;
+document.getElementById('signout-btn').addEventListener('click', signOutUser);
+
+// ── State ────────────────────────────────────────────────────────────────────
+let _active       = [];            // active checkout docs, sorted by due date
+let _studentsById = new Map();     // studentId -> student doc (for parent email)
+let _booksById    = new Map();     // bookId -> book doc (for availableCopies)
+let _search       = '';
+let _ready        = false;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function toMs(ts) {
+  const d = ts?.toDate ? ts.toDate() : new Date(ts);
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+function daysUntil(ts) {
+  const due = ts?.toDate ? ts.toDate() : new Date(ts);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return Math.round((due - today) / 86_400_000);
+}
+function matchesSearch(co) {
+  if (!_search) return true;
+  return (co.studentName  || '').toLowerCase().includes(_search)
+      || (co.bookTitle    || '').toLowerCase().includes(_search)
+      || (co.studentGrade || '').toLowerCase().includes(_search);
+}
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+const students = await loadStudents();
+_studentsById = new Map(students.map(s => [s.id, s]));
+
+subscribeToBooks((books) => {
+  _booksById = new Map(books.map(b => [b.id, b]));
+  if (_ready) render();
+});
+
+onSnapshot(
+  query(collection(db, 'checkouts'), where('status', '==', 'active')),
+  (snap) => {
+    _active = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => toMs(a.dueDate) - toMs(b.dueDate));
+    _ready = true;
+    document.getElementById('page-loading').hidden = true;
+    document.getElementById('page-content').hidden = false;
+    render();
+  },
+  (err) => {
+    console.error(err);
+    document.getElementById('page-loading').innerHTML =
+      '<p class="text-danger">Could not load circulation data. Try refreshing.</p>';
+  },
+);
+
+// ── Search ───────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', (e) => {
+  _search = e.target.value.trim().toLowerCase();
+  render();
+});
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render() {
+  const rows = _active.filter(matchesSearch);
+  renderStats(rows);
+  renderDueSoon(rows);
+  renderByStudent(rows);
+  renderNextAvailable(rows);
+}
+
+function statTile(value, label, color) {
+  return `<div><div class="stat-value"${color ? ` style="color:${color}"` : ''}>${value}</div>`
+       + `<div class="stat-label">${label}</div></div>`;
+}
+
+function renderStats(rows) {
+  const overdue  = rows.filter(co => daysUntil(co.dueDate) < 0).length;
+  const dueWeek  = rows.filter(co => { const d = daysUntil(co.dueDate); return d >= 0 && d <= 7; }).length;
+  const students = new Set(rows.map(co => co.studentId)).size;
+  document.getElementById('stats').innerHTML =
+    statTile(rows.length, 'Books issued')
+    + statTile(overdue, 'Overdue', overdue ? 'var(--color-danger)' : '')
+    + statTile(dueWeek, 'Due within 7 days', dueWeek ? 'var(--color-warning)' : '')
+    + statTile(students, 'Students with books');
+}
+
+// Build a mailto: link. Addresses stay raw (widest mail-client compatibility);
+// only subject and body are percent-encoded.
+function buildMailto({ to = '', subject = '', body = '' }) {
+  const q = [];
+  if (subject) q.push('subject=' + encodeURIComponent(subject));
+  if (body)    q.push('body='    + encodeURIComponent(body));
+  return `mailto:${to}` + (q.length ? '?' + q.join('&') : '');
+}
+
+const REMINDER_SUBJECT = 'St. Thomas Library — book due soon';
+
+function reminderBody(studentName, items) {
+  const list = items.map(i => `• "${i.title}" — due ${i.due}`).join('\n');
+  return `Dear parent,\n\n`
+    + `Our records show that ${studentName} has the following St. Thomas Library `
+    + `book(s) due soon. Please return or renew at the next class:\n\n`
+    + `${list}\n\n`
+    + `Thank you,\nSt. Thomas Library`;
+}
+
+function remindMailto(co, email) {
+  return buildMailto({
+    to: email,
+    subject: REMINDER_SUBJECT,
+    body: reminderBody(
+      co.studentName || 'your child',
+      [{ title: co.bookTitle || 'book', due: formatDate(co.dueDate) }],
+    ),
+  });
+}
+
+function renderDueSoon(rows) {
+  const soon = rows
+    .filter(co => daysUntil(co.dueDate) <= 7)
+    .sort((a, b) => toMs(a.dueDate) - toMs(b.dueDate));
+
+  const wrap    = document.getElementById('due-soon-wrap');
+  const actions = document.getElementById('due-soon-actions');
+  const empty   = document.getElementById('due-soon-empty');
+
+  if (!soon.length) {
+    wrap.hidden = true;
+    actions.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  wrap.hidden = false;
+  actions.hidden = false;
+  empty.hidden = true;
+
+  document.getElementById('due-soon-tbody').innerHTML = soon.map(co => {
+    const { label, cls } = getOverdueStatus(co.dueDate);
+    const email = _studentsById.get(co.studentId)?.parentEmail || '';
+    return `
+      <tr data-checkout="${co.id}" data-book="${escHtml(co.bookId || '')}">
+        <td class="cb-col">
+          <input type="checkbox" class="remind-cb"
+                 ${email ? `data-email="${escHtml(email)}"` : 'disabled title="No parent email on file"'} />
+        </td>
+        <td style="font-weight:500">${escHtml(co.studentName || '—')}</td>
+        <td style="color:var(--color-gray-500)">${escHtml(co.studentGrade || '')}</td>
+        <td>${escHtml(co.bookTitle || '—')}</td>
+        <td style="white-space:nowrap">${formatDate(co.dueDate)}</td>
+        <td><span class="badge ${cls}">${label}</span></td>
+        <td class="td-actions" style="white-space:nowrap">
+          ${email ? `<a class="btn btn-ghost btn-sm" href="${remindMailto(co, email)}">✉ Remind</a>` : ''}
+          <button class="btn btn-ghost btn-sm checkin-btn" type="button" style="margin-left:.25rem">Check In</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('select-all').checked = false;
+  updateBulkButton();
+}
+
+function renderByStudent(rows) {
+  const groups = new Map();
+  for (const co of rows) {
+    if (!groups.has(co.studentId)) groups.set(co.studentId, []);
+    groups.get(co.studentId).push(co);
+  }
+  const list = [...groups.values()]
+    .map(items => ({ items, name: items[0].studentName, grade: items[0].studentGrade }))
+    .sort((a, b) => b.items.length - a.items.length || (a.name || '').localeCompare(b.name || ''));
+
+  const el = document.getElementById('by-student');
+  if (!list.length) {
+    el.innerHTML = '<p class="text-muted">No active checkouts.</p>';
+    return;
+  }
+  el.innerHTML = list.map(g => {
+    const over = g.items.length > 2;
+    return `
+      <div class="student-group">
+        <div class="student-group-head">
+          <span style="font-weight:600">${escHtml(g.name || '—')}</span>
+          <span style="color:var(--color-gray-500); font-size:.8125rem"> ${escHtml(g.grade || '')}</span>
+          <span class="badge ${over ? 'badge-overdue' : 'badge-checked-out'}" style="margin-left:.5rem">
+            ${g.items.length} book${g.items.length > 1 ? 's' : ''}${over ? ' — over limit' : ''}
+          </span>
+        </div>
+        <ul class="student-group-list">
+          ${g.items.map(co => {
+            const { label, cls } = getOverdueStatus(co.dueDate);
+            return `<li><span>${escHtml(co.bookTitle || '—')}</span>`
+                 + `<span class="badge ${cls}">${label} · ${formatDate(co.dueDate)}</span></li>`;
+          }).join('')}
+        </ul>
+      </div>`;
+  }).join('');
+}
+
+function renderNextAvailable(rows) {
+  const byBook = new Map();
+  for (const co of rows) {
+    if (!byBook.has(co.bookId)) byBook.set(co.bookId, []);
+    byBook.get(co.bookId).push(co);
+  }
+
+  const soldOut = [];
+  for (const [bookId, items] of byBook) {
+    const book = _booksById.get(bookId);
+    if (!book) continue;
+    if ((book.availableCopies ?? 0) > 0) continue;
+    const when = items.map(c => toMs(c.dueDate)).filter(Boolean).sort((a, b) => a - b)[0];
+    soldOut.push({ title: book.title, total: book.totalCopies || items.length, when });
+  }
+  soldOut.sort((a, b) => (a.when || Infinity) - (b.when || Infinity));
+
+  const el = document.getElementById('next-available');
+  if (!soldOut.length) {
+    el.innerHTML = '<p class="text-muted">Every title has a copy available.</p>';
+    return;
+  }
+  el.innerHTML = `<ul class="plain-list">` + soldOut.map(s => `
+    <li>
+      <span style="font-weight:500">${escHtml(s.title || '—')}</span>
+      <span style="color:var(--color-gray-500)"> — all ${s.total} cop${s.total > 1 ? 'ies' : 'y'} out</span>
+      ${s.when
+        ? `<span class="badge badge-due-soon" style="margin-left:.5rem">next free ${formatDate(new Date(s.when))}</span>`
+        : ''}
+    </li>`).join('') + `</ul>`;
+}
+
+// ── Reminder emails — one personalised draft per student, addressed To: ──────
+// Groups the checked rows by student so a student with several books due gets
+// a single email listing all of them.
+function selectedReminders() {
+  const groups = new Map(); // key -> { email, name, items: [{ title, due }] }
+  for (const cb of document.querySelectorAll('.remind-cb:checked')) {
+    const email = cb.dataset.email;
+    if (!email) continue;
+    const co = _active.find(c => c.id === cb.closest('tr').dataset.checkout);
+    if (!co) continue;
+    const key = co.studentId || co.studentName || email;
+    if (!groups.has(key)) groups.set(key, { email, name: co.studentName || 'your child', items: [] });
+    groups.get(key).items.push({ title: co.bookTitle || 'book', due: formatDate(co.dueDate) });
+  }
+  return [...groups.values()];
+}
+
+function updateBulkButton() {
+  const n = selectedReminders().length;
+  const btn = document.getElementById('draft-bulk-btn');
+  btn.disabled = !n;
+  btn.textContent = n ? `Draft ${n} reminder${n > 1 ? 's' : ''}` : 'Draft reminders for selected';
+}
+
+document.getElementById('due-soon-tbody').addEventListener('change', (e) => {
+  if (e.target.classList.contains('remind-cb')) updateBulkButton();
+});
+
+document.getElementById('select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.remind-cb:not([disabled])').forEach(cb => { cb.checked = e.target.checked; });
+  updateBulkButton();
+});
+
+document.getElementById('draft-bulk-btn').addEventListener('click', () => {
+  const groups = selectedReminders();
+  if (!groups.length) return;
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    window.location.href = buildMailto({
+      to: g.email,
+      subject: REMINDER_SUBJECT,
+      body: reminderBody(g.name, g.items),
+    });
+    const left = groups.length - i - 1;
+    if (left > 0 && !confirm(`Opened a draft for ${g.name}.\nOpen the next reminder? (${left} left)`)) break;
+  }
+});
+
+// ── Check-in from the table ──────────────────────────────────────────────────
+document.getElementById('due-soon-tbody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.checkin-btn');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const checkoutId = tr.dataset.checkout;
+  const bookId     = tr.dataset.book;
+  const co = _active.find(c => c.id === checkoutId);
+  if (!confirm(`Check in "${co?.bookTitle || 'this book'}" from ${co?.studentName || 'this student'}?`)) return;
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    await checkinBook({ checkoutId, bookId });
+    showToast('Book checked in.', 'success');
+    // the onSnapshot listener re-renders automatically
+  } catch (err) {
+    console.error(err);
+    showToast('Check-in failed. Try again.', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Check In';
+  }
+});
+</script>
+
+  <script src="/js/pwa.js" defer></script>
+</body>
+</html>
